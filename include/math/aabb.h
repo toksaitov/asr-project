@@ -115,6 +115,13 @@ namespace asr
             _box_was_changed = true;
         }
 
+        [[nodiscard]] bool intersects_with_point(const glm::vec3 p) const {
+			return _minimum.x <= p.x && p.x <= _maximum.x
+				&& _minimum.y <= p.y && p.y <= _maximum.y
+				&& _minimum.z <= p.z && p.z <= _maximum.z;
+				
+		}
+
     private:
         glm::vec3 _minimum;
         glm::vec3 _maximum;

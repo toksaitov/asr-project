@@ -72,6 +72,19 @@ namespace asr
             _children.erase(_children.begin() + static_cast<std::vector<std::shared_ptr<Object>>::difference_type>(position));
         }
 
+        void remove_child(std::shared_ptr<Object> object) {
+			for (auto ptr = _children.begin(); ptr < _children.end(); ptr++) {
+				if (*ptr == object) {
+					_children.erase(ptr);
+					break;
+				}
+			}
+		}
+
+		void clear_children() {
+			_children.clear();
+		}
+
         const std::vector<std::shared_ptr<Object>> &get_children() const
         {
             return _children;
