@@ -4,14 +4,32 @@
 #include <GL/glew.h>
 #include <SDL.h>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/transform.hpp>
+
+#include <cassert>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <functional>
 #include <iostream>
-#include <limits>
+#include <stack>
 #include <string>
+#include <vector>
 
 namespace asr
 {
+    /*
+     * Common Constants
+     */
+
+    static constexpr float pi{static_cast<float>(M_PI)};
+    static constexpr float two_pi{2.0f * static_cast<float>(M_PI)};
+    static constexpr float half_pi{0.5f * static_cast<float>(M_PI)};
+    static constexpr float quarter_pi{0.25f * static_cast<float>(M_PI)};
+
     /*
      * Geometry Types
      */
@@ -27,6 +45,36 @@ namespace asr
         TriangleStrip
     };
 
+    struct Vertex {
+        float x, y, z;
+        float r, g, b, a;
+    };
+
+    typedef std::vector<asr::Vertex> Vertices;
+    typedef std::vector<unsigned int> Indices;
+    typedef std::pair<asr::Vertices, asr::Indices> GeometryPair;
+
+    struct Geometry
+    {
+        GeometryType type{Triangles};
+        unsigned int vertex_count{0};
+
+        GLuint vertex_array_object{0};
+        GLuint vertex_buffer_object{0};
+        GLuint index_buffer_object{0};
+    };
+
+    /*
+     * Transformation Types
+     */
+
+    enum MatrixMode
+    {
+        Model,
+        View,
+        Projection
+    };
+
     namespace data
     {
         /*
@@ -40,24 +88,37 @@ namespace asr
         static SDL_Window *window{nullptr};
         static SDL_GLContext gl_context;
 
+        bool window_should_close{false};
+        std::function<void(int)> key_down_event_handler;
+        std::function<void(const uint8_t *)> keys_down_event_handler;
+
         /*
          * Shader Data
          */
 
         static GLuint shader_program{0};
+
         static GLint position_attribute_location{-1};
         static GLint color_attribute_location{-1};
+
+        static GLint mvp_matrix_uniform_location{-1};
         static GLint time_uniform_location{-1};
 
         /*
          * Geometry Data
          */
 
-        static GLuint vertex_array_object{0};
-        static GLuint vertex_buffer_object{0};
+        static Geometry *current_geometry{nullptr};
 
-        static GLenum geometry_type;
-        static size_t geometry_vertex_count{0};
+        /*
+         * Transformation Data
+         */
+
+        static std::stack<glm::mat4> model_matrix_stack;
+        static std::stack<glm::mat4> view_matrix_stack;
+        static std::stack<glm::mat4> projection_matrix_stack;
+
+        static std::stack<glm::mat4> *current_matrix_stack = &model_matrix_stack;
 
         /*
          * Utility Data
@@ -99,11 +160,12 @@ namespace asr
      * Window Handling
      */
 
-    static void create_window(unsigned int width, unsigned int height, const std::string &name = "ASR: Version 1.0")
+    static void create_window(unsigned int width, unsigned int height, const std::string &name = "ASR: Version 1.1")
     {
         SDL_Init(SDL_INIT_VIDEO);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
 
         data::window_width = width;
         data::window_height = height;
@@ -134,16 +196,42 @@ namespace asr
             std::exit(-1);
         }
 
-        SDL_GL_SetSwapInterval(1);
+        if (SDL_GL_SetSwapInterval(-1) < 0) {
+            SDL_GL_SetSwapInterval(1);
+        }
+
+        data::key_down_event_handler = [&](int key) { };
+        data::keys_down_event_handler = [&](const uint8_t *keys) { };
     }
 
-    static void process_window_events(bool *should_stop)
+    static void create_window(const std::string &name = "ASR: Version 1.1")
+    {
+        create_window(data::fullscreen, data::fullscreen, name);
+    }
+
+    static void set_key_down_event_handler(std::function<void(int)> event_handler)
+    {
+        data::key_down_event_handler = std::move(event_handler);
+    }
+
+    static void set_keys_down_event_handler(std::function<void(const uint8_t *)> event_handler)
+    {
+        data::keys_down_event_handler = std::move(event_handler);
+    }
+
+    static void process_window_events(bool *should_stop, bool ignore_esc_key = false)
     {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
+            if (event.type == SDL_QUIT || data::window_should_close) {
                 *should_stop = true;
+            } else if (event.type == SDL_KEYDOWN) {
+                if (!ignore_esc_key && event.key.keysym.sym == SDLK_ESCAPE) {
+                    *should_stop = true;
+                }
+                data::key_down_event_handler(event.key.keysym.sym);
             }
+            data::keys_down_event_handler(SDL_GetKeyboardState(nullptr));
         }
     }
 
@@ -238,6 +326,7 @@ namespace asr
         data::color_attribute_location = glGetAttribLocation(shader_program, "color");
 
         data::time_uniform_location = glGetUniformLocation(shader_program, "time");
+        data::mvp_matrix_uniform_location = glGetUniformLocation(shader_program, "model_view_projection_matrix");
 
         data::shader_program = shader_program;
     }
@@ -257,30 +346,46 @@ namespace asr
         data::color_attribute_location = -1;
 
         data::time_uniform_location = -1;
+        data::mvp_matrix_uniform_location = -1;
     }
 
     /*
      * Geometry Handling
      */
 
-    static void create_geometry(GeometryType type, const float *data, const size_t vertex_count)
+    static Geometry create_geometry(
+        GeometryType type,
+        Vertices vertices,
+        Indices indices
+    )
     {
-        data::geometry_vertex_count = vertex_count;
-        data::geometry_type = utilities::convert_geometry_type_to_es2_geometry_type(type);
+        Geometry geometry{
+            type, static_cast<unsigned int>(indices.size())
+        };
 
 #ifdef __APPLE__
-        glGenVertexArraysAPPLE(1, &data::vertex_array_object);
-        glBindVertexArrayAPPLE(data::vertex_array_object);
+        glGenVertexArraysAPPLE(1, &geometry.vertex_array_object);
+        glBindVertexArrayAPPLE(geometry.vertex_array_object);
 #else
-        glGenVertexArrays(1, &data::vertex_array_object);
-        glBindVertexArray(data::vertex_array_object);
+        glGenVertexArrays(1, &geometry.vertex_array_object);
+        glBindVertexArray(geometry.vertex_array_object);
 #endif
 
-        glGenBuffers(1, &data::vertex_buffer_object);
-        glBindBuffer(GL_ARRAY_BUFFER, data::vertex_buffer_object);
+        glGenBuffers(1, &geometry.vertex_buffer_object);
+        glBindBuffer(GL_ARRAY_BUFFER, geometry.vertex_buffer_object);
         glBufferData(
             GL_ARRAY_BUFFER,
-            static_cast<GLsizeiptr>(data::geometry_vertex_count * 7 * sizeof(float)), data,
+            static_cast<GLsizeiptr>(vertices.size() * sizeof(Vertex)),
+            reinterpret_cast<const float *>(vertices.data()),
+            GL_STATIC_DRAW
+        );
+
+        glGenBuffers(1, &geometry.index_buffer_object);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geometry.index_buffer_object);
+        glBufferData(
+            GL_ELEMENT_ARRAY_BUFFER,
+            static_cast<GLsizeiptr>(indices.size() * sizeof(decltype(indices)::value_type)),
+            reinterpret_cast<const unsigned int *>(indices.data()),
             GL_STATIC_DRAW
         );
 
@@ -302,59 +407,252 @@ namespace asr
         glBindVertexArray(0);
 #endif
         glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        return geometry;
     }
 
-    static void destroy_geometry()
+    static void set_geometry_current(Geometry *geometry)
+    {
+        data::current_geometry = geometry;
+        if (geometry != nullptr) {
+#ifdef __APPLE__
+            glBindVertexArrayAPPLE(geometry->vertex_array_object);
+#else
+            glBindVertexArray(geometry->vertex_array_object);
+#endif
+        } else {
+#ifdef __APPLE__
+            glBindVertexArrayAPPLE(0);
+#else
+            glBindVertexArray(0);
+#endif
+        }
+    }
+
+    static void destroy_geometry(Geometry &geometry)
     {
 #ifdef __APPLE__
         GLint current_vertex_array_object;
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING_APPLE, &current_vertex_array_object);
-        if (data::vertex_array_object == static_cast<GLint>(current_vertex_array_object)) {
+        if (geometry.vertex_array_object == static_cast<GLint>(current_vertex_array_object)) {
             glBindVertexArrayAPPLE(0);
         }
 
-        glDeleteVertexArraysAPPLE(1, &data::vertex_array_object);
+        glDeleteVertexArraysAPPLE(1, &geometry.vertex_array_object);
 #else
         GLint current_vertex_array_object;
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &current_vertex_array_object);
-        if (data::vertex_array_object == static_cast<GLint>(current_vertex_array_object)) {
+        if (geometry.vertex_array_object == static_cast<GLint>(current_vertex_array_object)) {
             glBindVertexArray(0);
         }
 
-        glDeleteVertexArrays(1, &data::vertex_array_object);
+        glDeleteVertexArrays(1, &geometry.vertex_array_object);
 #endif
-        data::vertex_array_object = 0;
+        geometry.vertex_array_object = 0;
 
         GLint current_vertex_buffer_object;
         glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &current_vertex_buffer_object);
-        if (data::vertex_buffer_object == static_cast<GLint>(current_vertex_buffer_object)) {
+        if (geometry.vertex_buffer_object == static_cast<GLint>(current_vertex_buffer_object)) {
             glBindBuffer(GL_ARRAY_BUFFER, 0);
         }
-        glDeleteBuffers(1, &data::vertex_buffer_object);
-        data::vertex_buffer_object = 0;
+        glDeleteBuffers(1, &geometry.vertex_buffer_object);
+        geometry.vertex_buffer_object = 0;
+
+        GLint current_index_buffer_object;
+        glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &current_index_buffer_object);
+        if (geometry.index_buffer_object == static_cast<GLint>(current_index_buffer_object)) {
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        }
+        glDeleteBuffers(1, &geometry.index_buffer_object);
+        geometry.index_buffer_object = 0;
+    }
+
+    /*
+     * Transformation
+     */
+
+    static void set_matrix_mode(MatrixMode mode)
+    {
+        switch (mode) {
+            case Model:
+                data::current_matrix_stack = &data::model_matrix_stack;
+                break;
+            case View:
+                data::current_matrix_stack = &data::view_matrix_stack;
+                break;
+            case Projection:
+                data::current_matrix_stack = &data::projection_matrix_stack;
+                break;
+        }
+    }
+
+    static void translate_matrix(glm::vec3 translation)
+    {
+        glm::mat4 current_matrix = data::current_matrix_stack->top();
+        glm::mat4 translated_matrix = glm::translate(current_matrix, translation);
+
+        data::current_matrix_stack->pop();
+        data::current_matrix_stack->push(translated_matrix);
+    }
+
+    static void rotate_matrix(glm::vec3 rotation)
+    {
+        glm::mat4 current_matrix = data::current_matrix_stack->top();
+        glm::mat4 rotated_matrix = current_matrix;
+        rotated_matrix = glm::rotate(rotated_matrix, rotation.y, glm::vec3{0.0f, 1.0f, 0.0f});
+        rotated_matrix = glm::rotate(rotated_matrix, rotation.x, glm::vec3{1.0f, 0.0f, 0.0f});
+        rotated_matrix = glm::rotate(rotated_matrix, rotation.z, glm::vec3{0.0f, 0.0f, 1.0f});
+
+        data::current_matrix_stack->pop();
+        data::current_matrix_stack->push(rotated_matrix);
+    }
+
+    static void scale_matrix(glm::vec3 scale)
+    {
+        glm::mat4 current_matrix = data::current_matrix_stack->top();
+        glm::mat4 scaled_matrix = glm::scale(current_matrix, scale);
+
+        data::current_matrix_stack->pop();
+        data::current_matrix_stack->push(scaled_matrix);
+    }
+
+    static inline glm::mat4 get_matrix()
+    {
+        return data::current_matrix_stack->top();
+    }
+
+    static inline glm::mat4 get_model_matrix()
+    {
+        return data::model_matrix_stack.top();
+    }
+
+    static inline glm::mat4 get_view_matrix()
+    {
+        return data::view_matrix_stack.top();
+    }
+
+    static inline glm::mat4 get_projection_matrix()
+    {
+        return data::projection_matrix_stack.top();
+    }
+
+    static void set_matrix(glm::mat4 matrix)
+    {
+        data::current_matrix_stack->pop();
+        data::current_matrix_stack->push(matrix);
+    }
+
+    static void load_identity_matrix()
+    {
+        set_matrix(glm::mat4{1.0f});
+    }
+
+    static void load_look_at_matrix(glm::vec3 position, glm::vec3 target)
+    {
+        glm::vec3 up{0.0f, 1.0f, 0.0f};
+        set_matrix(glm::lookAt(position, target, up));
+    }
+
+    static void load_orthographic_projection_matrix(float zoom, float near_plane, float far_plane)
+    {
+        float aspect_ratio{static_cast<float>(data::window_width) / static_cast<float>(data::window_height)};
+
+        float left{-(zoom * aspect_ratio)};
+        float right{zoom * aspect_ratio};
+        float bottom{-zoom};
+        float top{zoom};
+
+        set_matrix(glm::ortho(left, right, bottom, top, near_plane, far_plane));
+    }
+
+    static void load_perspective_projection_matrix(float field_of_view, float near_plane, float far_plane)
+    {
+        float aspect_ratio{static_cast<float>(data::window_width) / static_cast<float>(data::window_height)};
+
+        set_matrix(glm::perspective(field_of_view, aspect_ratio, near_plane, far_plane));
+    }
+
+    static void push_matrix()
+    {
+        glm::mat4 top_matrix = data::current_matrix_stack->top();
+        data::current_matrix_stack->push(top_matrix);
+    }
+
+    static void pop_matrix()
+    {
+        data::current_matrix_stack->pop();
+        if (data::current_matrix_stack->empty()) {
+            data::current_matrix_stack->push(glm::mat4{1.0f});
+        }
+    }
+
+    static void clear_matrices()
+    {
+        while (!data::current_matrix_stack->empty()) data::current_matrix_stack->pop();
+        data::current_matrix_stack->push(glm::mat4{1.0f});
     }
 
     /*
      * Rendering
      */
 
+    static void set_line_width(float line_width)
+    {
+        glLineWidth(static_cast<GLfloat>(line_width));
+    }
+
+    static void enable_face_culling()
+    {
+        glEnable(GL_CULL_FACE);
+        glFrontFace(GL_CCW);
+        glCullFace(GL_BACK);
+    }
+
+    static void disable_face_culling()
+    {
+        glDisable(GL_CULL_FACE);
+    }
+
+    static void enable_depth_test()
+    {
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+    }
+
+    static void disable_depth_test()
+    {
+        glDisable(GL_DEPTH_TEST);
+    }
+
     static void prepare_for_rendering()
     {
         glClearColor(0, 0, 0, 0);
         glViewport(0, 0, static_cast<GLsizei>(data::window_width), static_cast<GLsizei>(data::window_height));
+        glEnable(GL_PROGRAM_POINT_SIZE);
+
+        while (!data::model_matrix_stack.empty()) data::model_matrix_stack.pop();
+        data::model_matrix_stack.push(glm::mat4{1.0f});
+
+        while (!data::view_matrix_stack.empty()) data::view_matrix_stack.pop();
+        data::view_matrix_stack.push(glm::mat4{1.0f});
+
+        while (!data::projection_matrix_stack.empty()) data::projection_matrix_stack.pop();
+        data::projection_matrix_stack.push(glm::mat4{1.0f});
 
         data::rendering_start_time = std::chrono::system_clock::now();
     }
 
-    static void render_next_frame()
+    static void prepare_to_render_frame()
     {
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
+
+    static void render_current_geometry()
+    {
+        assert(data::current_geometry);
+
         glUseProgram(data::shader_program);
-#ifdef __APPLE__
-        glBindVertexArrayAPPLE(data::vertex_array_object);
-#else
-        glBindVertexArray(data::vertex_array_object);
-#endif
 
         if (data::time_uniform_location != -1) {
             float time =
@@ -368,8 +666,28 @@ namespace asr
             );
         }
 
-        glDrawArrays(data::geometry_type, 0, static_cast<GLsizei>(data::geometry_vertex_count));
+        if (data::mvp_matrix_uniform_location != -1) {
+            glm::mat4 model_matrix{data::model_matrix_stack.top()};
+            glm::mat4 view_matrix{glm::inverse(data::view_matrix_stack.top())};
+            glm::mat4 projection_matrix{data::projection_matrix_stack.top()};
+            glm::mat4 model_view_projection_matrix{projection_matrix * view_matrix * model_matrix};
+            glUniformMatrix4fv(
+                data::mvp_matrix_uniform_location,
+                1, GL_FALSE,
+                glm::value_ptr(model_view_projection_matrix)
+            );
+        }
 
+        glDrawElements(
+            utilities::convert_geometry_type_to_es2_geometry_type(data::current_geometry->type),
+            static_cast<GLsizei>(data::current_geometry->vertex_count),
+            GL_UNSIGNED_INT,
+            nullptr
+        );
+    }
+
+    static void finish_frame_rendering()
+    {
         SDL_GL_SwapWindow(data::window);
     }
 }

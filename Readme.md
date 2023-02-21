@@ -9,7 +9,7 @@ Install all the prerequisites first.
 
 * MSVC (with Visual Studio 2022), Clang (with Latest Xcode or Command Line Tools for Xcode), GCC (any version with support of C++17)
 * CMake (version `3.22` or higher)
-* Conan (version `1.57` or higher)
+* Conan (version `1.59` or higher)
 * GPU drivers (latest version with stable support of OpenGL 2 or ES 2.0)
 
 ## Building

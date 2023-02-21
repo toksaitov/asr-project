@@ -1,6 +1,7 @@
 [requires]
 sdl/2.26.1
 glew/2.2.0
+glm/0.9.9.8
 
 [generators]
 cmake
