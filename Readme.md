@@ -12,6 +12,11 @@ Install all the prerequisites first.
 * Conan (version `1.59` or higher)
 * GPU drivers (latest version with stable support of OpenGL 2 or ES 2.0)
 
+For Python Pip package manager only: Install conan version `1.59` or higher
+```bash
+pip install -r requirements.txt
+```
+
 ## Building
 
 Create a `build` directory and set it as a current working directory:
