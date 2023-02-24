@@ -59,8 +59,8 @@ static asr::GeometryPair generate_circle_geometry_data(
     float angle{0.0f};
     float angle_delta{asr::two_pi / static_cast<float>(segment_count)};
 
-    float x{std::cosf(angle) * radius};
-    float y{std::sinf(angle) * radius};
+    float x{cosf(angle) * radius};
+    float y{sinf(angle) * radius};
     vertices.push_back(asr::Vertex{
         x, y, 0.0f,
         color.r, color.g, color.b, color.a
@@ -78,8 +78,8 @@ static asr::GeometryPair generate_circle_geometry_data(
                 indices.push_back(vertices.size() - 1);
             }
         }
-        float next_x{std::cosf(angle + angle_delta) * radius};
-        float next_y{std::sinf(angle + angle_delta) * radius};
+        float next_x{cosf(angle + angle_delta) * radius};
+        float next_y{sinf(angle + angle_delta) * radius};
         vertices.push_back(asr::Vertex{
             next_x, next_y, 0.0f,
             color.r, color.g, color.b, color.a
