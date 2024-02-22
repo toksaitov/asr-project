@@ -1,0 +1,15 @@
+CMakeCache.txt
+CMakeFiles
+CMakeLists.txt.user
+CMakeScripts
+CMakeUserPresets.json
+compile_commands.json
+install_manifest.txt
+Makefile
+cmake_install.cmake
+conan_provider.cmake
+CTestTestfile.cmake
+Testing
+_deps
+cmake-build-*
+build
