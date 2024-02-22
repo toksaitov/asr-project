@@ -1,0 +1,13 @@
+[requires]
+sdl/[~2]
+glew/[~2]
+
+[tool_requires]
+cmake/[~3.25]
+
+[generators]
+CMakeToolchain
+CMakeDeps
+
+[layout]
+cmake_layout
