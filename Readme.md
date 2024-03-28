@@ -57,10 +57,10 @@ Ensure all the prerequisites are installed before proceeding.
     cmake --build --preset conan-release # or `conan-debug` for a build with debugging information
     ```
 
-5. Run the test program from the `./build/Release/` directory:
+5. Run the test program from the root directory:
 
     ```bash
-    (cd ./build/Release && ./<name of the graphics test executable>) # Note the parentheses
+    ./build/Release/<name of the graphics test executable>
     ```
 
     You may need to set the Working Directory (CWD) in your IDE manually for some test targets to locate shader or image files.
