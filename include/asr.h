@@ -2,6 +2,7 @@
 #define ASR_H
 
 #include <GL/glew.h>
+#define SDL_MAIN_HANDLED
 #include <SDL.h>
 
 #define GLM_FORCE_SWIZZLE
