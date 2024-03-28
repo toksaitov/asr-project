@@ -1,5 +1,6 @@
 #include "asr.h"
 
+#include <cmath>
 #include <string>
 #include <utility>
 
@@ -68,11 +69,9 @@ static const std::string Fragment_Shader_Source{R"( // NOLINT(cert-err58-cpp)
     }
 )"};
 
-static asr::GeometryPair generate_rectangle_geometry_data(
+static asr::GeometryPair generate_ring_geometry_data(
                              asr::GeometryType geometry_type,
-                             float width, float height,
-                             unsigned int width_segments_count,
-                             unsigned int height_segments_count,
+                             float radius1, float radius2, unsigned int segment_count,
                              glm::vec4 color = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
                          )
 {
@@ -85,47 +84,61 @@ static asr::GeometryPair generate_rectangle_geometry_data(
     asr::Vertices vertices;
     asr::Indices indices;
 
-    float half_height{height * 0.5f};
-    float segment_height{height / static_cast<float>(height_segments_count)};
+    float angle{0.0f};
+    float angle_delta{asr::two_pi / static_cast<float>(segment_count)};
 
-    float half_width{width * 0.5f};
-    float segment_width{width / static_cast<float>(width_segments_count)};
-
-    for (auto i = 0U; i <= height_segments_count; ++i) {
-        float y{static_cast<float>(i) * segment_height - half_height};
-        float v{1.0f - static_cast<float>(i) / static_cast<float>(height_segments_count)};
-        for (auto j = 0U; j <= width_segments_count; ++j) {
-            float x{static_cast<float>(j) * segment_width - half_width};
-            float u{static_cast<float>(j) / static_cast<float>(width_segments_count)};
-            vertices.push_back(asr::Vertex{
-                x, y, 0.0f,
-                color.r, color.g, color.b, color.a,
-                u, v
-            });
-            if (geometry_type == asr::GeometryType::Points) {
-                indices.push_back(vertices.size() - 1);
-            }
+    float radius1norm = radius1 / radius2;
+    for (auto i = 0U; i <= segment_count; ++i) {
+        float next_x{cosf(angle + angle_delta) * radius1};
+        float next_y{sinf(angle + angle_delta) * radius1};
+        float next_u{0.5f + cosf(angle + angle_delta) * 0.5f * radius1norm};
+        float next_v{1.0f - (0.5f + sinf(angle + angle_delta) * 0.5f * radius1norm)};
+        vertices.push_back(asr::Vertex{
+            next_x, next_y, 0.0f,
+            color.r, color.g, color.b, color.a,
+            next_u, next_v
+        });
+        if (geometry_type == asr::GeometryType::Points) {
+            indices.push_back(vertices.size() - 1);
         }
+
+        angle += angle_delta;
+    }
+
+    angle = 0.0f;
+    for (auto i = 0U; i <= segment_count; ++i) {
+        float next_x{cosf(angle + angle_delta) * radius2};
+        float next_y{sinf(angle + angle_delta) * radius2};
+        float next_u{0.5f + cosf(angle + angle_delta) * 0.5f};
+        float next_v{1.0f - (0.5f + sinf(angle + angle_delta) * 0.5f)};
+        vertices.push_back(asr::Vertex{
+            next_x, next_y, 0.0f,
+            color.r, color.g, color.b, color.a,
+            next_u, next_v
+        });
+        if (geometry_type == asr::GeometryType::Points) {
+            indices.push_back(vertices.size() - 1);
+        }
+
+        angle += angle_delta;
     }
 
     if (geometry_type == asr::GeometryType::Lines || geometry_type == asr::GeometryType::Triangles) {
-        for (auto i = 0U; i < height_segments_count; ++i) {
-            for (auto j = 0U; j < width_segments_count; ++j) {
-                unsigned int index_a{i * (width_segments_count + 1) + j};
-                unsigned int index_b{index_a + 1};
-                unsigned int index_c{index_a + (width_segments_count + 1)};
-                unsigned int index_d{index_c + 1};
-                if (geometry_type == asr::GeometryType::Lines) {
-                    indices.insert(indices.end(), {
-                        index_a, index_b, index_b, index_c, index_c, index_a
-                    });
-                    indices.insert(indices.end(), {
-                        index_b, index_d, index_d, index_c, index_c, index_b
-                    });
-                } else {
-                    indices.insert(indices.end(), {index_a, index_b, index_c});
-                    indices.insert(indices.end(), {index_b, index_d, index_c});
-                }
+        for (auto i = 0U; i < segment_count; ++i) {
+            unsigned int index_a{i};
+            unsigned int index_b{index_a + 1};
+            unsigned int index_c{index_a + (segment_count + 1)};
+            unsigned int index_d{index_c + 1};
+            if (geometry_type == asr::GeometryType::Lines) {
+                indices.insert(indices.end(), {
+                    index_a, index_b, index_b, index_c, index_c, index_a
+                });
+                indices.insert(indices.end(), {
+                    index_b, index_d, index_d, index_c, index_c, index_b
+                });
+            } else {
+                indices.insert(indices.end(), {index_a, index_b, index_c});
+                indices.insert(indices.end(), {index_b, index_d, index_c});
             }
         }
     }
@@ -137,22 +150,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
 {
     using namespace asr;
 
-    create_window(500U, 500U, "Rectangle Test on ASR Version 1.2");
+    create_window(500U, 500U, "Ring Test on ASR Version 1.2");
     create_shader(Vertex_Shader_Source, Fragment_Shader_Source);
 
-    float width{1.0f}, height{1.0f};
-    unsigned int width_segments{5U}, height_segments{5U};
+    float radius1{0.5f}, radius2{0.7f};
+    unsigned int segments{25};
 
-    auto [triangle_vertices, triangle_indices] = generate_rectangle_geometry_data(Triangles, width, height, width_segments, height_segments);
+    auto [triangle_vertices, triangle_indices] = generate_ring_geometry_data(Triangles, radius1, radius2, segments);
     auto triangles = create_geometry(Triangles, triangle_vertices, triangle_indices);
 
     glm::vec4 edge_color{1.0f, 0.7f, 0.7f, 1.0f};
-    auto [edge_vertices, edge_indices] = generate_rectangle_geometry_data(Lines, width, height, width_segments, height_segments, edge_color);
+    auto [edge_vertices, edge_indices] = generate_ring_geometry_data(Lines, radius1, radius2, segments, edge_color);
     for (auto &vertex : edge_vertices) { vertex.z -= 0.01f; }
     auto lines = create_geometry(Lines, edge_vertices, edge_indices);
 
     glm::vec4 vertex_color{1.0f, 0.0f, 0.0f, 1.0f};
-    auto [vertices, vertex_indices] = generate_rectangle_geometry_data(Points, width, height, width_segments, height_segments, vertex_color);
+    auto [vertices, vertex_indices] = generate_ring_geometry_data(Points, radius1, radius2, segments, vertex_color);
     for (auto &vertex : vertices) { vertex.z -= 0.02f; }
     auto points = create_geometry(Points, vertices, vertex_indices);
 
