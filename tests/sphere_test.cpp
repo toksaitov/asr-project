@@ -3,6 +3,7 @@
 #include <cmath>
 #include <string>
 #include <utility>
+#include <vector>
 
 static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
     #version 110
@@ -13,6 +14,8 @@ static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
 
     uniform bool texture_enabled;
     uniform mat4 texture_transformation_matrix;
+
+    uniform float point_size;
 
     uniform mat4 model_view_projection_matrix;
 
@@ -28,7 +31,7 @@ static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
         }
 
         gl_Position = model_view_projection_matrix * position;
-        gl_PointSize = 10.0;
+        gl_PointSize = point_size;
     }
 )"};
 
@@ -94,10 +97,10 @@ static asr::GeometryPair generate_sphere_geometry_data(
             float u{static_cast<float>(j) / static_cast<float>(width_segments_count)};
             float theta{u * asr::two_pi};
 
-            float cos_phi{cos(phi)};
-            float sin_phi{sin(phi)};
-            float cos_theta{cos(theta)};
-            float sin_theta{sin(theta)};
+            float cos_phi{cosf(phi)};
+            float sin_phi{sinf(phi)};
+            float cos_theta{cosf(theta)};
+            float sin_theta{sinf(theta)};
 
             float x{cos_theta * sin_phi};
             float y{cos_phi};
@@ -105,6 +108,7 @@ static asr::GeometryPair generate_sphere_geometry_data(
 
             vertices.push_back(asr::Vertex{
                 x * radius, y * radius, z * radius,
+                x, y, z,
                 color.r, color.g, color.b, color.a,
                 1.0f - u, v
             });
@@ -151,8 +155,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
 {
     using namespace asr;
 
-    create_window(500U, 500U, "Sphere Test on ASR Version 1.2");
-    create_shader(Vertex_Shader_Source, Fragment_Shader_Source);
+    create_window(500U, 500U, "Sphere Test on ASR Version 1.3");
+
+    auto material = create_material(Vertex_Shader_Source, Fragment_Shader_Source);
 
     float radius{0.5f};
     unsigned int width_segments{20U}, height_segments{20U};
@@ -172,9 +177,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     auto texture = create_texture(image);
 
     prepare_for_rendering();
-    enable_depth_test();
-    enable_face_culling();
-    set_line_width(3.0f);
+
+    set_material_current(&material);
+    set_material_line_width(3.0f);
+    set_material_point_size(10.0f);
+    set_material_face_culling_enabled(true);
+    set_material_depth_test_enabled(true);
 
     static const float CAMERA_SPEED{6.0f};
     static const float CAMERA_ROT_SPEED{1.5f};
@@ -182,8 +190,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     static const float CAMERA_NEAR_PLANE{0.1f};
     static const float CAMERA_FAR_PLANE{100.0f};
 
-    glm::vec3 camera_position{1.40f, 1.0f, 1.5f};
-    glm::vec3 camera_rotation{-0.5f, 0.75f, 0.0f};
+    glm::vec3 camera_position{0.8f, 0.62f, 1.0f};
+    glm::vec3 camera_rotation{-0.45f, 0.7f, 0.0f};
     set_keys_down_event_handler([&](const uint8_t *keys) {
         if (keys[SDL_SCANCODE_ESCAPE]) std::exit(0);
         if (keys[SDL_SCANCODE_W]) camera_rotation.x -= CAMERA_ROT_SPEED * get_dt();
@@ -199,7 +207,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
             camera_position += shift;
         }
     });
-    set_matrix_mode(MatrixMode::Projection);
+    set_matrix_mode(Projection);
     load_perspective_projection_matrix(CAMERA_FOV, CAMERA_NEAR_PLANE, CAMERA_FAR_PLANE);
 
     bool should_stop{false};
@@ -227,11 +235,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     }
 
     destroy_texture(texture);
+
     destroy_geometry(triangles);
     destroy_geometry(lines);
     destroy_geometry(points);
 
-    destroy_shader();
+    destroy_material(material);
+
     destroy_window();
 
     return 0;

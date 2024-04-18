@@ -2,6 +2,7 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
 static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
     #version 110
@@ -12,6 +13,8 @@ static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
 
     uniform bool texture_enabled;
     uniform mat4 texture_transformation_matrix;
+
+    uniform float point_size;
 
     uniform mat4 model_view_projection_matrix;
 
@@ -27,7 +30,7 @@ static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
         }
 
         gl_Position = model_view_projection_matrix * position;
-        gl_PointSize = 10.0;
+        gl_PointSize = point_size;
     }
 )"};
 
@@ -99,11 +102,15 @@ static asr::GeometryPair generate_box_geometry_data(
 
     for (auto i = 0U; i <= height_segments_count; ++i) {
         float y{static_cast<float>(i) * segment_height - half_height};
+        float v{1.0f/3.0f + (1.0f - static_cast<float>(i) / static_cast<float>(height_segments_count)) / 3.0f};
         for (auto j = 0U; j <= width_segments_count; ++j) {
             float x{static_cast<float>(j) * segment_width - half_width};
+            float u{0.25f + static_cast<float>(j) / static_cast<float>(width_segments_count) * 0.25f};
             vertices.push_back(asr::Vertex{
                 x, y, half_depth,
-                color.r, color.g, color.b, color.a
+                0.0f, 0.0f, 1.0f,
+                color.r, color.g, color.b, color.a,
+                u, v
             });
             if (geometry_type == asr::GeometryType::Points) {
                 indices.push_back(vertices.size() - 1);
@@ -139,11 +146,15 @@ static asr::GeometryPair generate_box_geometry_data(
 
     for (auto i = 0U; i <= height_segments_count; ++i) {
         float y{static_cast<float>(i) * segment_height - half_height};
+        float v{1.0f/3.0f + (1.0f - static_cast<float>(i) / static_cast<float>(height_segments_count)) / 3.0f};
         for (auto j = 0U; j <= depth_segments_count; ++j) {
             float z{static_cast<float>(j) * segment_depth - half_depth};
+            float u{0.5f + (1.0f - static_cast<float>(j) / static_cast<float>(depth_segments_count)) * 0.25f};
             vertices.push_back(asr::Vertex{
                 half_width, y, z,
-                color.r, color.g, color.b, color.a
+                1.0f, 0.0f, 0.0f,
+                color.r, color.g, color.b, color.a,
+                u, v
             });
             if (geometry_type == asr::GeometryType::Points) {
                 indices.push_back(vertices.size() - 1);
@@ -153,10 +164,10 @@ static asr::GeometryPair generate_box_geometry_data(
 
     if (geometry_type == asr::GeometryType::Lines || geometry_type == asr::GeometryType::Triangles) {
         for (auto i = 0U; i < height_segments_count; ++i) {
-            for (auto j = 0U; j < width_segments_count; ++j) {
-                unsigned int index_a{i * (width_segments_count + 1) + j};
+            for (auto j = 0U; j < depth_segments_count; ++j) {
+                unsigned int index_a{i * (depth_segments_count + 1) + j};
                 unsigned int index_b{index_a + 1};
-                unsigned int index_c{index_a + (width_segments_count + 1)};
+                unsigned int index_c{index_a + (depth_segments_count + 1)};
                 unsigned int index_d{index_c + 1};
                 index_a += offset; index_b += offset;
                 index_c += offset; index_d += offset;
@@ -181,11 +192,15 @@ static asr::GeometryPair generate_box_geometry_data(
 
     for (auto i = 0U; i <= height_segments_count; ++i) {
         float y{static_cast<float>(i) * segment_height - half_height};
+        float v{1.0f/3.0f + (1.0f - static_cast<float>(i) / static_cast<float>(height_segments_count)) / 3.0f};
         for (auto j = 0U; j <= width_segments_count; ++j) {
             float x{static_cast<float>(j) * segment_width - half_width};
+            float u{0.75f + (1.0f - static_cast<float>(j) / static_cast<float>(width_segments_count)) * 0.25f};
             vertices.push_back(asr::Vertex{
                 x, y, -half_depth,
-                color.r, color.g, color.b, color.a
+                0.0f, 0.0f, -1.0f,
+                color.r, color.g, color.b, color.a,
+                u, v
             });
             if (geometry_type == asr::GeometryType::Points) {
                 indices.push_back(vertices.size() - 1);
@@ -223,11 +238,15 @@ static asr::GeometryPair generate_box_geometry_data(
 
     for (auto i = 0U; i <= height_segments_count; ++i) {
         float y{static_cast<float>(i) * segment_height - half_height};
+        float v{1.0f/3.0f + (1.0f - static_cast<float>(i) / static_cast<float>(height_segments_count)) / 3.0f};
         for (auto j = 0U; j <= depth_segments_count; ++j) {
             float z{static_cast<float>(j) * segment_depth - half_depth};
+            float u{static_cast<float>(j) / static_cast<float>(depth_segments_count) * 0.25f};
             vertices.push_back(asr::Vertex{
                 -half_width, y, z,
-                color.r, color.g, color.b, color.a
+                -1.0f, 0.0f, 0.0f,
+                color.r, color.g, color.b, color.a,
+                u, v
             });
             if (geometry_type == asr::GeometryType::Points) {
                 indices.push_back(vertices.size() - 1);
@@ -237,10 +256,10 @@ static asr::GeometryPair generate_box_geometry_data(
 
     if (geometry_type == asr::GeometryType::Lines || geometry_type == asr::GeometryType::Triangles) {
         for (auto i = 0U; i < height_segments_count; ++i) {
-            for (auto j = 0U; j < width_segments_count; ++j) {
-                unsigned int index_a{i * (width_segments_count + 1) + j};
+            for (auto j = 0U; j < depth_segments_count; ++j) {
+                unsigned int index_a{i * (depth_segments_count + 1) + j};
                 unsigned int index_b{index_a + 1};
-                unsigned int index_c{index_a + (width_segments_count + 1)};
+                unsigned int index_c{index_a + (depth_segments_count + 1)};
                 unsigned int index_d{index_c + 1};
                 index_a += offset; index_b += offset;
                 index_c += offset; index_d += offset;
@@ -265,11 +284,15 @@ static asr::GeometryPair generate_box_geometry_data(
 
     for (auto i = 0U; i <= depth_segments_count; ++i) {
         float z{static_cast<float>(i) * segment_depth - half_depth};
+        float v{2.0f/3.0f + (1.0f - static_cast<float>(i) / static_cast<float>(depth_segments_count)) / 3.0f};
         for (auto j = 0U; j <= width_segments_count; ++j) {
             float x{static_cast<float>(j) * segment_width - half_width};
+            float u{0.25f + static_cast<float>(j) / static_cast<float>(width_segments_count) * 0.25f};
             vertices.push_back(asr::Vertex{
                 x, -half_height, z,
-                color.r, color.g, color.b, color.a
+                0.0f, -1.0f, 0.0f,
+                color.r, color.g, color.b, color.a,
+                u, v
             });
             if (geometry_type == asr::GeometryType::Points) {
                 indices.push_back(vertices.size() - 1);
@@ -278,7 +301,7 @@ static asr::GeometryPair generate_box_geometry_data(
     }
 
     if (geometry_type == asr::GeometryType::Lines || geometry_type == asr::GeometryType::Triangles) {
-        for (auto i = 0U; i < height_segments_count; ++i) {
+        for (auto i = 0U; i < depth_segments_count; ++i) {
             for (auto j = 0U; j < width_segments_count; ++j) {
                 unsigned int index_a{i * (width_segments_count + 1) + j};
                 unsigned int index_b{index_a + 1};
@@ -307,11 +330,15 @@ static asr::GeometryPair generate_box_geometry_data(
 
     for (auto i = 0U; i <= depth_segments_count; ++i) {
         float z{static_cast<float>(i) * segment_depth - half_depth};
+        float v{static_cast<float>(i) / static_cast<float>(depth_segments_count) / 3.0f};
         for (auto j = 0U; j <= width_segments_count; ++j) {
             float x{static_cast<float>(j) * segment_width - half_width};
+            float u{0.25f + static_cast<float>(j) / static_cast<float>(width_segments_count) * 0.25f};
             vertices.push_back(asr::Vertex{
                 x, half_height, z,
-                color.r, color.g, color.b, color.a
+                0.0f, 1.0f, 0.0f,
+                color.r, color.g, color.b, color.a,
+                u, v
             });
             if (geometry_type == asr::GeometryType::Points) {
                 indices.push_back(vertices.size() - 1);
@@ -320,7 +347,7 @@ static asr::GeometryPair generate_box_geometry_data(
     }
 
     if (geometry_type == asr::GeometryType::Lines || geometry_type == asr::GeometryType::Triangles) {
-        for (auto i = 0U; i < height_segments_count; ++i) {
+        for (auto i = 0U; i < depth_segments_count; ++i) {
             for (auto j = 0U; j < width_segments_count; ++j) {
                 unsigned int index_a{i * (width_segments_count + 1) + j};
                 unsigned int index_b{index_a + 1};
@@ -350,8 +377,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
 {
     using namespace asr;
 
-    create_window(500U, 500U, "Box Test on ASR Version 1.2");
-    create_shader(Vertex_Shader_Source, Fragment_Shader_Source);
+    create_window(500U, 500U, "Box Test on ASR Version 1.3");
+
+    auto material = create_material(Vertex_Shader_Source, Fragment_Shader_Source);
 
     float width{1.0f}, height{1.0f}, depth{1.0f};
     unsigned int width_segments{5U}, height_segments{5U}, depth_segments{5U};
@@ -370,9 +398,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     auto texture = create_texture(image);
 
     prepare_for_rendering();
-    enable_face_culling();
-    enable_depth_test();
-    set_line_width(3.0f);
+
+    set_material_current(&material);
+    set_material_line_width(3.0f);
+    set_material_point_size(10.0f);
+    set_material_face_culling_enabled(true);
+    set_material_depth_test_enabled(true);
 
     static const float CAMERA_SPEED{6.0f};
     static const float CAMERA_ROT_SPEED{1.5f};
@@ -425,10 +456,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     }
 
     destroy_texture(texture);
+
     destroy_geometry(triangles);
     destroy_geometry(lines);
     destroy_geometry(points);
-    destroy_shader();
+
+    destroy_material(material);
 
     destroy_window();
 

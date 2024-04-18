@@ -36,3 +36,16 @@ target_link_libraries(box_test ${ASR_LIBRARIES})
 
 add_executable(triangle_test ${ASR_SOURCES} "tests/triangle_test.cpp")
 target_link_libraries(triangle_test ${ASR_LIBRARIES})
+
+add_executable(shader_test ${ASR_SOURCES} "tests/shader_test.cpp")
+target_link_libraries(shader_test ${ASR_LIBRARIES})
+
+add_executable(instancing_test ${ASR_SOURCES} "tests/instancing_test.cpp")
+target_link_libraries(instancing_test ${ASR_LIBRARIES})
+
+add_executable(no_instancing_test ${ASR_SOURCES} "tests/no_instancing_test.cpp")
+target_link_libraries(no_instancing_test ${ASR_LIBRARIES})
+
+add_executable(lighting_test ${ASR_SOURCES} "tests/lighting_test.cpp")
+target_link_libraries(lighting_test ${ASR_LIBRARIES})
+
