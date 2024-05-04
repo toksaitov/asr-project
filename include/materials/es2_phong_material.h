@@ -102,6 +102,7 @@ namespace asr
                 return;
             } else if (!_shader->is_compiled()) {
                 _shader->compile();
+                _shader->use();
                 if (_shader->is_dead()) { return; }
             }
 

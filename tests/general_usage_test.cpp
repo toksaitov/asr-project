@@ -297,7 +297,7 @@ int main(int argc, char **argv)
 {
     // Window
 
-    auto window = std::make_shared<ES2SDLWindow>("asr", 0, 0);
+    auto window = std::make_shared<ES2SDLWindow>("asr", 1280, 720);
     window->set_capture_mouse_enabled(true);
     window->set_relative_mouse_mode_enabled(true);
 
