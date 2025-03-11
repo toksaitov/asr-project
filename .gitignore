@@ -12,4 +12,4 @@ CTestTestfile.cmake
 Testing
 _deps
 cmake-build-*
-build
+build/
