@@ -2,6 +2,7 @@
 sdl/[~2]
 glew/[~2]
 glm/[~1]
+stb/cci.20240531
 
 [tool_requires]
 cmake/[~3.25]

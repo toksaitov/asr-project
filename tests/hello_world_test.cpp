@@ -1,6 +1,7 @@
 #include "asr.h"
 
 #include <string>
+#include <vector>
 
 static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
     #version 110
@@ -35,38 +36,40 @@ static const std::string Fragment_Shader_Source{R"( // NOLINT(cert-err58-cpp)
     }
 )"};
 
-static const asr::Vertices Triangle_Geometry_Vertices{ // NOLINT(cert-err58-cpp)
-    //           Position             Color (RGBA)
-    asr::Vertex{ 0.5f, -0.305f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f},
-    asr::Vertex{ 0.0f,  0.565f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f},
-    asr::Vertex{-0.5f, -0.305f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f}
+static const asr::Vertices Triangle_Geometry_Vertices = { // NOLINT(cert-err58-cpp)
+    //           Position             Color (RGBA)            Texture Coordinates (UV)
+    asr::Vertex{ 0.5f,   0.0f,  0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f,  0.5f },
+    asr::Vertex{-0.25f,  0.43f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.25f, 0.07f},
+    asr::Vertex{-0.25f, -0.43f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.25f, 0.93f}
 };
-static const asr::Indices Triangle_Geometry_Indices{0U, 1U, 2U}; // NOLINT(cert-err58-cpp)
+static const asr::Indices Triangle_Geometry_Indices = { // NOLINT(cert-err58-cpp)
+    0U, 1U, 2U
+};
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
 {
     using namespace asr;
 
-    create_window(500, 500, "Simple Triangle Test on ASR Version 1.1");
+    create_window(500U, 500U, "Simple Triangle Test on ASR Version 1.2");
     create_shader(Vertex_Shader_Source, Fragment_Shader_Source);
 
-    auto triangle = create_geometry(Triangles, Triangle_Geometry_Vertices, Triangle_Geometry_Indices);
+    auto geometry = create_geometry(Triangles, Triangle_Geometry_Vertices, Triangle_Geometry_Indices);
 
     prepare_for_rendering();
+
+    set_geometry_current(&geometry);
 
     bool should_stop{false};
     while (!should_stop) {
         process_window_events(&should_stop);
 
         prepare_to_render_frame();
-
-        set_geometry_current(&triangle);
         render_current_geometry();
 
         finish_frame_rendering();
     }
 
-    destroy_geometry(triangle);
+    destroy_geometry(geometry);
 
     destroy_shader();
     destroy_window();
