@@ -15,8 +15,6 @@ static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
     uniform bool texture_enabled;
     uniform mat4 texture_transformation_matrix;
 
-    uniform float point_size;
-
     uniform mat4 model_view_projection_matrix;
 
     varying vec4 fragment_color;
@@ -31,7 +29,6 @@ static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
         }
 
         gl_Position = model_view_projection_matrix * position;
-        gl_PointSize = point_size;
     }
 )"};
 
@@ -155,32 +152,29 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
 {
     using namespace asr;
 
-    create_window(500U, 500U, "Sphere Test on ASR Version 1.3");
+    create_window(1280U, 720U, "Transformation Test on ASR Version 1.3");
 
     auto material = create_material(Vertex_Shader_Source, Fragment_Shader_Source);
 
     float radius{0.5f};
     unsigned int width_segments{20U}, height_segments{20U};
 
-    auto [triangle_vertices, triangle_indices] = generate_sphere_geometry_data(Triangles, radius, width_segments, height_segments);
-    auto triangles = create_geometry(Triangles, triangle_vertices, triangle_indices);
+    auto [geometry_vertices, geometry_indices] = generate_sphere_geometry_data(Triangles, radius, width_segments, height_segments);
+    auto geometry = create_geometry(Triangles, geometry_vertices, geometry_indices);
 
-    glm::vec4 edge_color{1.0f, 0.7f, 0.7f, 1.0f};
-    auto [edge_vertices, edge_indices] = generate_sphere_geometry_data(Lines, radius * 1.005f, width_segments, height_segments, edge_color);
-    auto lines = create_geometry(Lines, edge_vertices, edge_indices);
-
-    glm::vec4 vertex_color{1.0f, 0.0f, 0.0f, 1.0f};
-    auto [vertices, vertex_indices] = generate_sphere_geometry_data(Points, radius * 1.01f, width_segments, height_segments, vertex_color);
-    auto points = create_geometry(Points, vertices, vertex_indices);
-
-    auto image = read_image_file("data/images/uv_test.png");
-    auto texture = create_texture(image);
+    bool generate_mipmaps = true;
+    auto sun_image     = read_image_file("data/images/sun.jpg");
+    auto sun_texture   = create_texture(sun_image, generate_mipmaps);
+    auto venus_image   = read_image_file("data/images/venus.jpg");
+    auto venus_texture = create_texture(venus_image, generate_mipmaps);
+    auto earth_image   = read_image_file("data/images/earth.jpg");
+    auto earth_texture = create_texture(earth_image, generate_mipmaps);
+    auto moon_image    = read_image_file("data/images/moon.jpg");
+    auto moon_texture  = create_texture(moon_image, generate_mipmaps);
 
     prepare_for_rendering();
 
     set_material_current(&material);
-    set_material_line_width(3.0f);
-    set_material_point_size(10.0f);
     set_material_face_culling_enabled(true);
     set_material_depth_test_enabled(true);
 
@@ -190,10 +184,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     static const float CAMERA_NEAR_PLANE{0.1f};
     static const float CAMERA_FAR_PLANE{100.0f};
 
-    glm::vec3 camera_position{0.8f, 0.62f, 1.0f};
-    glm::vec3 camera_rotation{-0.45f, 0.7f, 0.0f};
+    glm::vec3 camera_position{0.0f, 3.23f, 6.34f};
+    glm::vec3 camera_rotation{-0.6f, 0.0f, 0.0f};
     set_keys_down_event_handler([&](const uint8_t *keys) {
-        if (keys[SDL_SCANCODE_ESCAPE]) std::exit(0);
+        if (keys[SDL_SCANCODE_ESCAPE]) exit(0);
         if (keys[SDL_SCANCODE_W]) camera_rotation.x -= CAMERA_ROT_SPEED * get_dt();
         if (keys[SDL_SCANCODE_A]) camera_rotation.y += CAMERA_ROT_SPEED * get_dt();
         if (keys[SDL_SCANCODE_S]) camera_rotation.x += CAMERA_ROT_SPEED * get_dt();
@@ -210,35 +204,111 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     set_matrix_mode(Projection);
     load_perspective_projection_matrix(CAMERA_FOV, CAMERA_NEAR_PLANE, CAMERA_FAR_PLANE);
 
+    float sun_rotation{0.0f};
+    float sun_delta_angle{0.2f};
+    float sun_size{2.0f};
+
+    float venus_rotation{0.0f};
+    float venus_delta_angle{-0.8f};
+    float venus_sun_rotation{0.0f};
+    float venus_sun_delta_angle{-0.1f};
+    float venus_sun_distance{3.0f};
+    float venus_size{0.42f};
+
+    float earth_rotation{0.0f};
+    float earth_delta_angle{-0.8f};
+    float earth_sun_rotation{0.0f};
+    float earth_sun_delta_angle{0.5f};
+    float earth_sun_distance{5.0f};
+    float earth_size{0.4f};
+
+    float moon_rotation{0.0f};
+    float moon_delta_angle{2.6f};
+    float moon_earth_rotation{0.0f};
+    float moon_earth_delta_angle{1.0f};
+    float moon_earth_distance{0.5f};
+    float moon_size{0.15f};
+
     bool should_stop{false};
     while (!should_stop) {
         process_window_events(&should_stop);
 
         prepare_to_render_frame();
 
-        set_matrix_mode(MatrixMode::View);
+        set_matrix_mode(View);
         load_identity_matrix();
         translate_matrix(camera_position);
         rotate_matrix(camera_rotation);
 
-        // set_texture_current(&texture);
-        set_geometry_current(&triangles);
+        set_matrix_mode(Model);
+
+        // Sun
+
+        load_identity_matrix();
+        rotate_matrix(glm::vec3{0.0f, sun_rotation, 0.0f});
+        sun_rotation += sun_delta_angle * get_dt();
+        scale_matrix(glm::vec3{sun_size});
+
+        set_texture_current(&sun_texture);
+        set_geometry_current(&geometry);
         render_current_geometry();
 
-        set_texture_current(nullptr);
-        set_geometry_current(&lines);
+        // Venus
+
+        load_identity_matrix();
+        rotate_matrix(glm::vec3{0.0f, venus_sun_rotation, 0.0f});
+        translate_matrix(glm::vec3{venus_sun_distance, 0.0f, 0.0f});
+        rotate_matrix(glm::vec3{0.0f, -venus_sun_rotation, 0.0f});
+        venus_sun_rotation += venus_sun_delta_angle * get_dt();
+        rotate_matrix(glm::vec3{0.0f, venus_rotation, 0.0f});
+        venus_rotation += venus_delta_angle * get_dt();
+        scale_matrix(glm::vec3{venus_size});
+
+        set_texture_current(&venus_texture);
+        set_geometry_current(&geometry);
         render_current_geometry();
-        set_geometry_current(&points);
+
+        // Earth
+
+        load_identity_matrix();
+        rotate_matrix(glm::vec3{0.0f, earth_sun_rotation, 0.0f});
+        translate_matrix(glm::vec3{earth_sun_distance, 0.0f, 0.0f});
+        rotate_matrix(glm::vec3{0.0f, -earth_sun_rotation, 0.0f});
+        earth_sun_rotation += earth_sun_delta_angle * get_dt();
+
+        push_matrix();
+        rotate_matrix(glm::vec3{0.0f, earth_rotation, 0.0f});
+        earth_rotation += earth_delta_angle * get_dt();
+        scale_matrix(glm::vec3{earth_size});
+
+        set_texture_current(&earth_texture);
+        set_geometry_current(&geometry);
+        render_current_geometry();
+
+        // Moon
+
+        pop_matrix();
+        rotate_matrix(glm::vec3{0.0f, moon_earth_rotation, 0.0f});
+        translate_matrix(glm::vec3{moon_earth_distance, 0.0f, 0.0f});
+        rotate_matrix(glm::vec3{0.0f, -moon_earth_rotation, 0.0f});
+        moon_earth_rotation += moon_earth_delta_angle * get_dt();
+        rotate_matrix(glm::vec3{0.0f, moon_rotation, 0.0f});
+        moon_rotation += moon_delta_angle * get_dt();
+        scale_matrix(glm::vec3{moon_size});
+
+        set_texture_current(&moon_texture);
+        set_geometry_current(&geometry);
         render_current_geometry();
 
         finish_frame_rendering();
     }
 
-    destroy_texture(texture);
+    destroy_texture(moon_texture);
+    destroy_texture(earth_texture);
+    destroy_texture(venus_texture);
+    destroy_texture(sun_texture);
 
-    destroy_geometry(triangles);
-    destroy_geometry(lines);
-    destroy_geometry(points);
+    destroy_geometry(geometry);
 
     destroy_material(material);
 

@@ -14,6 +14,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include <any>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -23,6 +24,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <stack>
 #include <string>
@@ -48,12 +50,20 @@ namespace asr
     struct Vertex
     {
         float x, y, z;
+        float nx, ny, nz;
         float r{1.0f}, g{1.0f}, b{1.0f}, a{1.0f};
         float u, v;
     };
 
+    struct Instance
+    {
+        glm::mat4 transform;
+        float r, g, b, a;
+    };
+
     typedef std::vector<asr::Vertex> Vertices;
     typedef std::vector<unsigned int> Indices;
+    typedef std::vector<Instance> Instances;
     typedef std::pair<asr::Vertices, asr::Indices> GeometryPair;
 
     enum GeometryType
@@ -74,7 +84,10 @@ namespace asr
 
         GLuint vertex_array_object{0U};
         GLuint vertex_buffer_object{0U};
+        GLuint instance_buffer_object{0U};
         GLuint index_buffer_object{0U};
+
+        unsigned int instance_count{0U};
     };
 
     /*
@@ -132,6 +145,129 @@ namespace asr
     };
 
     /*
+     * Material Types
+     */
+
+    enum MaterialDepthTestFunction {
+        Never,
+        Always,
+        Less,
+        LowerOrEqual,
+        Equal,
+        Greater,
+        GreaterOrEqual,
+        NotEqual
+    };
+
+    enum MaterialBlendingEquation
+    {
+        Add,
+        Subtract,
+        ReverseSubtract
+    };
+
+    enum MaterialBlendingFunction
+    {
+        Zero,
+        One,
+        SourceColor,
+        OneMinusSourceColor,
+        DestinationColor,
+        OneMinusDestinationColor,
+        SourceAlpha,
+        OneMinusSourceAlpha,
+        DestinationAlpha,
+        OneMinusDestinationAlpha,
+        ConstantColor,
+        OneMinusConstantColor,
+        ConstantAlpha,
+        OneMinusConstantAlpha,
+        SourceAlphaSaturate
+    };
+
+    enum MaterialCullFaceMode
+    {
+        FrontFaces,
+        BackFaces,
+        FrontAndBackFaces
+    };
+
+    enum MaterialFrontFaceOrder
+    {
+        Clockwise,
+        Counterclockwise
+    };
+
+    struct Material
+    {
+        std::string vertex_shader;
+        std::string fragment_shader;
+
+        float line_width{1.0f};
+
+        bool point_sizing_enabled{true};
+        float point_size{1.0f};
+
+        bool face_culling_enabled{true};
+        MaterialCullFaceMode cull_face_mode{BackFaces};
+        MaterialFrontFaceOrder front_face_order{Counterclockwise};
+
+        bool depth_mask_enabled{true};
+        bool depth_test_enabled{false};
+        MaterialDepthTestFunction depth_test_function{Less};
+
+        bool blending_enabled{false};
+        MaterialBlendingEquation color_blending_equation{Add};
+        MaterialBlendingEquation alpha_blending_equation{Add};
+        MaterialBlendingFunction source_color_blending_function{SourceAlpha};
+        MaterialBlendingFunction source_alpha_blending_function{SourceAlpha};
+        MaterialBlendingFunction destination_color_blending_function{OneMinusSourceAlpha};
+        MaterialBlendingFunction destination_alpha_blending_function{OneMinusSourceAlpha};
+        glm::vec4 blending_constant_color{0.0f};
+
+        bool polygon_offset_enabled{false};
+        float polygon_offset_factor{0.0f};
+        float polygon_offset_units{0.0f};
+
+        GLuint shader_program{0U};
+
+        // Common Uniforms are Hard-Coded
+
+        GLint position_attribute_location{-1};
+        GLint normal_attribute_location{-1};
+        GLint color_attribute_location{-1};
+        GLint texture_coordinates_attribute_location{-1};
+
+        GLint instance_transform_attribute_location{-1};
+        GLint instance_color_attribute_location{-1};
+
+        GLint resolution_uniform_location{-1};
+        GLint mouse_uniform_location{-1};
+
+        GLint time_uniform_location{-1};
+        GLint dt_uniform_location{-1};
+
+        GLint texture_sampler_uniform_location{-1};
+        GLint texture_enabled_uniform_location{-1};
+        GLint texturing_mode_uniform_location{-1};
+        GLint texture_transformation_matrix_uniform_location{-1};
+
+        GLint point_size_uniform_location{-1};
+
+        GLint model_matrix_uniform_location{-1};
+        GLint view_matrix_uniform_location{-1};
+        GLint model_view_matrix_uniform_location{-1};
+        GLint projection_matrix_uniform_location{-1};
+        GLint view_projection_matrix_uniform_location{-1};
+        GLint mvp_matrix_uniform_location{-1};
+        GLint normal_matrix_uniform_location{-1};
+
+        // All the other uniforms including the common
+
+        std::map<std::string, GLint> shader_uniforms;
+    };
+
+    /*
      * Transformation Types
      */
 
@@ -164,34 +300,6 @@ namespace asr
         static std::function<void(const uint8_t *)> keys_down_event_handler;
 
         /*
-         * Shader Data
-         */
-
-        static GLuint shader_program{0U};
-
-        static GLint position_attribute_location{-1};
-        static GLint color_attribute_location{-1};
-        static GLint texture_coordinates_attribute_location{-1};
-
-        static GLint resolution_uniform_location{-1};
-        static GLint mouse_uniform_location{-1};
-
-        static GLint time_uniform_location{-1};
-        static GLint dt_uniform_location{-1};
-
-        static GLint texture_sampler_uniform_location{-1};
-        static GLint texture_enabled_uniform_location{-1};
-        static GLint texturing_mode_uniform_location{-1};
-        static GLint texture_transformation_matrix_uniform_location{-1};
-
-        static GLint model_matrix_uniform_location{-1};
-        static GLint view_matrix_uniform_location{-1};
-        static GLint model_view_matrix_uniform_location{-1};
-        static GLint projection_matrix_uniform_location{-1};
-        static GLint view_projection_matrix_uniform_location{-1};
-        static GLint mvp_matrix_uniform_location{-1};
-
-        /*
          * Geometry Data
          */
 
@@ -202,6 +310,12 @@ namespace asr
          */
 
         static Texture *current_texture{nullptr};
+
+        /*
+         * Material Data
+         */
+
+        static Material *current_material{nullptr};
 
         /*
          * Transformation Data
@@ -289,13 +403,119 @@ namespace asr
 
             return GL_NEAREST;
         }
+
+        /*
+         * Material Handling
+         */
+
+        static GLenum convert_cull_face_mode_to_es2_cull_face_mode(MaterialCullFaceMode cull_face_mode)
+        {
+            switch (cull_face_mode) {
+                case FrontFaces:
+                    return GL_FRONT;
+                case BackFaces:
+                    return GL_BACK;
+                case FrontAndBackFaces:
+                    return GL_FRONT_AND_BACK;
+            }
+
+            return GL_BACK;
+        }
+
+        static GLenum convert_front_face_order_to_es2_front_face_order(MaterialFrontFaceOrder front_face_order)
+        {
+            switch (front_face_order) {
+                case Clockwise:
+                    return GL_CW;
+                case Counterclockwise:
+                    return GL_CCW;
+            }
+
+            return GL_CW;
+        }
+
+        static GLenum convert_depth_test_func_to_es2_depth_test_func(MaterialDepthTestFunction depth_test_function)
+        {
+            switch (depth_test_function) {
+                case Never:
+                    return GL_NEVER;
+                case Always:
+                    return GL_ALWAYS;
+                case Less:
+                    return GL_LESS;
+                case LowerOrEqual:
+                    return GL_LEQUAL;
+                case Equal:
+                    return GL_EQUAL;
+                case Greater:
+                    return GL_GREATER;
+                case GreaterOrEqual:
+                    return GL_GEQUAL;
+                case NotEqual:
+                    return GL_NOTEQUAL;
+            }
+
+            return GL_LESS;
+        }
+
+        static GLenum convert_blending_equation_to_es2_blending_equation(MaterialBlendingEquation blending_equation)
+        {
+            switch (blending_equation) {
+                case Add:
+                    return GL_FUNC_ADD;
+                case Subtract:
+                    return GL_FUNC_SUBTRACT;
+                case ReverseSubtract:
+                    return GL_FUNC_REVERSE_SUBTRACT;
+            }
+
+            return GL_FUNC_ADD;
+        }
+
+        static GLenum convert_blending_func_to_es2_blending_func(MaterialBlendingFunction blending_function)
+        {
+            switch (blending_function) {
+                case Zero:
+                    return GL_ZERO;
+                case One:
+                    return GL_ONE;
+                case SourceColor:
+                    return GL_SRC_COLOR;
+                case OneMinusSourceColor:
+                    return GL_ONE_MINUS_SRC_COLOR;
+                case DestinationColor:
+                    return GL_DST_COLOR;
+                case OneMinusDestinationColor:
+                    return GL_ONE_MINUS_DST_COLOR;
+                case SourceAlpha:
+                    return GL_SRC_ALPHA;
+                case OneMinusSourceAlpha:
+                    return GL_ONE_MINUS_SRC_ALPHA;
+                case DestinationAlpha:
+                    return GL_DST_ALPHA;
+                case OneMinusDestinationAlpha:
+                    return GL_ONE_MINUS_DST_ALPHA;
+                case ConstantColor:
+                    return GL_CONSTANT_COLOR;
+                case OneMinusConstantColor:
+                    return GL_ONE_MINUS_CONSTANT_COLOR;
+                case ConstantAlpha:
+                    return GL_CONSTANT_ALPHA;
+                case OneMinusConstantAlpha:
+                    return GL_ONE_MINUS_CONSTANT_ALPHA;
+                case SourceAlphaSaturate:
+                    return GL_SRC_ALPHA_SATURATE;
+            }
+
+            return GL_SRC_ALPHA;
+        }
     }
 
     /*
      * Window Handling
      */
 
-    static void create_window(unsigned int width, unsigned int height, const std::string &name = "ASR: Version 1.2")
+    static void create_window(unsigned int width, unsigned int height, const std::string &name = "ASR: Version 4.0")
     {
         SDL_Init(SDL_INIT_VIDEO);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
@@ -341,7 +561,7 @@ namespace asr
         data::keys_down_event_handler = [&](const uint8_t *keys) { };
     }
 
-    static void create_window(const std::string &name = "ASR: Version 1.2")
+    static void create_window(const std::string &name = "ASR: Version 1.3")
     {
         create_window(data::fullscreen, data::fullscreen, name);
     }
@@ -383,11 +603,13 @@ namespace asr
     }
 
     /*
-     * Shader Handling
+     * Material Handling
      */
 
-    static void create_shader(const std::string &vertex_shader, const std::string &fragment_shader)
+    static Material create_material(const std::string &vertex_shader, const std::string &fragment_shader)
     {
+        Material material{vertex_shader, fragment_shader};
+
         GLint status;
 
         const char *vertex_shader_source = vertex_shader.c_str();
@@ -454,92 +676,538 @@ namespace asr
             std::exit(-1);
         }
 
+        GLint uniform_count;
+        const GLsizei uniform_name_buffer_size = 256;
+        GLchar uniform_name_buffer[uniform_name_buffer_size];
+        GLint uniform_size;
+        GLenum uniform_type;
+
+        glGetProgramiv(shader_program, GL_ACTIVE_UNIFORMS, &uniform_count);
+        for (GLuint i = 0; i < static_cast<GLuint>(uniform_count); i++) {
+            GLsizei uniform_name_length;
+            glGetActiveUniform(
+                shader_program, i,
+                uniform_name_buffer_size,
+                &uniform_name_length,
+                &uniform_size,
+                &uniform_type,
+                uniform_name_buffer
+            );
+
+            if (uniform_size > 1) {
+                std::string uniform_name{uniform_name_buffer};
+                uniform_name = uniform_name.substr(0, uniform_name.size() - 3);
+                for (GLint j = 0; j < uniform_size; ++j) {
+                    std::string uniform_name_at_slot = uniform_name + "[" + std::to_string(j) + "]";
+                    material.shader_uniforms[uniform_name_at_slot] =
+                        glGetUniformLocation(shader_program, uniform_name_at_slot.c_str());
+                }
+            } else {
+                std::string uniform_name(uniform_name_buffer);
+                material.shader_uniforms[uniform_name] =
+                    glGetUniformLocation(shader_program, uniform_name_buffer);
+            }
+        }
+
         glDetachShader(shader_program, vertex_shader_object);
         glDetachShader(shader_program, fragment_shader_object);
         glDeleteShader(vertex_shader_object);
         glDeleteShader(fragment_shader_object);
 
-        data::position_attribute_location =
+        material.position_attribute_location =
             glGetAttribLocation(shader_program, "position");
-        data::color_attribute_location =
+        material.normal_attribute_location =
+            glGetAttribLocation(shader_program, "normal");
+        material.color_attribute_location =
             glGetAttribLocation(shader_program, "color");
-        data::texture_coordinates_attribute_location =
+        material.texture_coordinates_attribute_location =
             glGetAttribLocation(shader_program, "texture_coordinates");
 
-        data::resolution_uniform_location =
+        material.instance_transform_attribute_location =
+            glGetAttribLocation(shader_program, "instance_transform");
+        material.instance_color_attribute_location =
+            glGetAttribLocation(shader_program, "instance_color");
+
+        material.resolution_uniform_location =
             glGetUniformLocation(shader_program, "resolution");
-        data::mouse_uniform_location =
+        material.mouse_uniform_location =
             glGetUniformLocation(shader_program, "mouse");
 
-        data::time_uniform_location =
+        material.time_uniform_location =
             glGetUniformLocation(shader_program, "time");
-        data::dt_uniform_location =
-            glGetUniformLocation(shader_program, "get_dt");
+        material.dt_uniform_location =
+            glGetUniformLocation(shader_program, "dt");
 
-        data::texture_enabled_uniform_location =
+        material.texture_enabled_uniform_location =
             glGetUniformLocation(shader_program, "texture_enabled");
-        data::texture_transformation_matrix_uniform_location =
+        material.texture_transformation_matrix_uniform_location =
             glGetUniformLocation(shader_program, "texture_transformation_matrix");
-        data::texturing_mode_uniform_location =
+        material.texturing_mode_uniform_location =
             glGetUniformLocation(shader_program, "texturing_mode");
-        data::texture_sampler_uniform_location =
+        material.texture_sampler_uniform_location =
             glGetUniformLocation(shader_program, "texture_sampler");
 
-        data::model_matrix_uniform_location =
-            glGetUniformLocation(shader_program, "model_matrix");
-        data::view_matrix_uniform_location =
-            glGetUniformLocation(shader_program, "view_matrix");
-        data::model_view_matrix_uniform_location =
-            glGetUniformLocation(shader_program, "model_view_matrix");
-        data::projection_matrix_uniform_location =
-            glGetUniformLocation(shader_program, "projection_matrix");
-        data::view_projection_matrix_uniform_location =
-            glGetUniformLocation(shader_program, "view_projection_matrix");
-        data::mvp_matrix_uniform_location =
-            glGetUniformLocation(shader_program, "model_view_projection_matrix");
+        material.point_size_uniform_location =
+            glGetUniformLocation(shader_program, "point_size");
 
-        data::shader_program = shader_program;
+        material.model_matrix_uniform_location =
+            glGetUniformLocation(shader_program, "model_matrix");
+        material.view_matrix_uniform_location =
+            glGetUniformLocation(shader_program, "view_matrix");
+        material.model_view_matrix_uniform_location =
+            glGetUniformLocation(shader_program, "model_view_matrix");
+        material.projection_matrix_uniform_location =
+            glGetUniformLocation(shader_program, "projection_matrix");
+        material.view_projection_matrix_uniform_location =
+            glGetUniformLocation(shader_program, "view_projection_matrix");
+        material.mvp_matrix_uniform_location =
+            glGetUniformLocation(shader_program, "model_view_projection_matrix");
+        material.normal_matrix_uniform_location =
+            glGetUniformLocation(shader_program, "normal_matrix");
+
+        material.shader_program = shader_program;
+
+        return material;
     }
 
-    static void destroy_shader()
+    static void set_material_line_width(float line_width)
+    {
+        assert(data::current_material);
+
+        data::current_material->line_width = line_width;
+        glLineWidth(static_cast<GLfloat>(line_width));
+    }
+
+    static void set_material_point_sizing_enabled(bool point_sizing_enabled)
+    {
+        assert(data::current_material);
+
+        data::current_material->point_sizing_enabled = point_sizing_enabled;
+        if (point_sizing_enabled) {
+            glEnable(GL_PROGRAM_POINT_SIZE);
+        } else {
+            glDisable(GL_PROGRAM_POINT_SIZE);
+        }
+    }
+
+    static void set_material_point_size(float point_size)
+    {
+        assert(data::current_material);
+
+        data::current_material->point_size = point_size;
+    }
+
+    static void set_material_face_culling_enabled(bool face_culling_enabled)
+    {
+        assert(data::current_material);
+
+        data::current_material->face_culling_enabled = face_culling_enabled;
+        if (face_culling_enabled) {
+            glEnable(GL_CULL_FACE);
+        } else {
+            glDisable(GL_CULL_FACE);
+        }
+    }
+
+    static void set_material_cull_face_mode(MaterialCullFaceMode cull_face_mode)
+    {
+        assert(data::current_material);
+
+        data::current_material->cull_face_mode = cull_face_mode;
+        glCullFace(utilities::convert_cull_face_mode_to_es2_cull_face_mode(cull_face_mode));
+    }
+
+    static void set_material_front_face_order(MaterialFrontFaceOrder front_face_order)
+    {
+        assert(data::current_material);
+
+        data::current_material->front_face_order = front_face_order;
+        glFrontFace(utilities::convert_front_face_order_to_es2_front_face_order(front_face_order));
+    }
+
+    static void set_material_depth_mask_enabled(bool depth_mask_enabled)
+    {
+        assert(data::current_material);
+
+        data::current_material->depth_mask_enabled = depth_mask_enabled;
+        if (depth_mask_enabled) {
+            glDepthMask(GL_TRUE);
+        } else {
+            glDepthMask(GL_FALSE);
+        }
+    }
+
+    static void set_material_depth_test_enabled(bool depth_test_enabled)
+    {
+        assert(data::current_material);
+
+        data::current_material->depth_test_enabled = depth_test_enabled;
+        if (depth_test_enabled) {
+            glEnable(GL_DEPTH_TEST);
+        } else {
+            glDisable(GL_DEPTH_TEST);
+        }
+    }
+
+    static void set_material_depth_test_function(MaterialDepthTestFunction depth_test_function)
+    {
+        assert(data::current_material);
+
+        data::current_material->depth_test_function = depth_test_function;
+        glDepthFunc(utilities::convert_depth_test_func_to_es2_depth_test_func(depth_test_function));
+    }
+
+    static void set_material_blending_enabled(bool blending_enabled)
+    {
+        assert(data::current_material);
+
+        data::current_material->blending_enabled = blending_enabled;
+        if (blending_enabled) {
+            glEnable(GL_BLEND);
+        } else {
+            glDisable(GL_BLEND);
+        }
+    }
+
+    static void set_material_blending_equations(
+                    MaterialBlendingEquation color_blending_equation,
+                    MaterialBlendingEquation alpha_blending_equation
+                )
+    {
+        assert(data::current_material);
+
+        data::current_material->color_blending_equation = color_blending_equation;
+        data::current_material->alpha_blending_equation = alpha_blending_equation;
+        glBlendEquationSeparate(utilities::convert_blending_equation_to_es2_blending_equation(color_blending_equation),
+                                utilities::convert_blending_equation_to_es2_blending_equation(alpha_blending_equation));
+    }
+
+    static void set_material_blending_functions(
+                    MaterialBlendingFunction source_color_blending_function,
+                    MaterialBlendingFunction source_alpha_blending_function,
+                    MaterialBlendingFunction destination_color_blending_function,
+                    MaterialBlendingFunction destination_alpha_blending_function
+                )
+    {
+        assert(data::current_material);
+
+        data::current_material->source_color_blending_function = source_color_blending_function;
+        data::current_material->source_alpha_blending_function = source_alpha_blending_function;
+        data::current_material->destination_color_blending_function = destination_color_blending_function;
+        data::current_material->destination_alpha_blending_function = destination_alpha_blending_function;
+        glBlendFuncSeparate(utilities::convert_blending_func_to_es2_blending_func(source_color_blending_function),
+                            utilities::convert_blending_func_to_es2_blending_func(destination_color_blending_function),
+                            utilities::convert_blending_func_to_es2_blending_func(source_alpha_blending_function),
+                            utilities::convert_blending_func_to_es2_blending_func(destination_alpha_blending_function));
+    }
+
+    static void set_material_blending_constant_color(glm::vec4 blending_constant_color)
+    {
+        assert(data::current_material);
+
+        data::current_material->blending_constant_color = blending_constant_color;
+        glBlendColor(static_cast<GLclampf>(blending_constant_color[0]),
+                     static_cast<GLclampf>(blending_constant_color[1]),
+                     static_cast<GLclampf>(blending_constant_color[2]),
+                     static_cast<GLclampf>(blending_constant_color[3]));
+    }
+
+    static void set_material_polygon_offset_enabled(bool polygon_offset_enabled)
+    {
+        assert(data::current_material);
+
+        data::current_material->polygon_offset_enabled = polygon_offset_enabled;
+        if (polygon_offset_enabled) {
+           glEnable(GL_POLYGON_OFFSET_FILL);
+        } else {
+            glDisable(GL_POLYGON_OFFSET_FILL);
+        }
+    }
+
+    static void set_material_polygon_offset_factor_and_units(float polygon_offset_factor, float polygon_offset_units)
+    {
+        assert(data::current_material);
+
+        data::current_material->polygon_offset_factor = polygon_offset_factor;
+        data::current_material->polygon_offset_units = polygon_offset_units;
+        glPolygonOffset(static_cast<GLfloat>(polygon_offset_factor),
+                        static_cast<GLfloat>(polygon_offset_units));
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, bool value)
+    {
+        assert(data::current_material);
+
+        glUniform1i(
+            data::current_material->shader_uniforms[parameter_name],
+            static_cast<GLint>(value)
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, int value)
+    {
+        assert(data::current_material);
+
+        glUniform1i(
+            data::current_material->shader_uniforms[parameter_name],
+            static_cast<GLint>(value)
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, int count, int *values)
+    {
+        assert(data::current_material);
+
+        glUniform1iv(
+            data::current_material->shader_uniforms[parameter_name],
+            count,
+            static_cast<GLint *>(values)
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, float value)
+    {
+        assert(data::current_material);
+
+        glUniform1f(
+            data::current_material->shader_uniforms[parameter_name],
+            static_cast<GLfloat>(value)
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, int count, float *values)
+    {
+        assert(data::current_material);
+
+        glUniform1fv(
+            data::current_material->shader_uniforms[parameter_name],
+            count,
+            static_cast<GLfloat *>(values)
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, glm::vec2 value)
+    {
+        assert(data::current_material);
+
+        glUniform2fv(
+            data::current_material->shader_uniforms[parameter_name],
+            1, glm::value_ptr(value)
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, int count, glm::vec2 *values)
+    {
+        assert(data::current_material);
+
+        glUniform2fv(
+            data::current_material->shader_uniforms[parameter_name],
+            count, glm::value_ptr(values[0])
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, glm::vec3 value)
+    {
+        assert(data::current_material);
+
+        glUniform3fv(
+            data::current_material->shader_uniforms[parameter_name],
+            1, glm::value_ptr(value)
+        );
+    }
+
+    static void set_material_parameter(const std::string& parameter_name, int count, glm::vec3 *values)
+    {
+        assert(data::current_material);
+
+        glUniform3fv(
+            data::current_material->shader_uniforms[parameter_name],
+            count, glm::value_ptr(values[0])
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, glm::vec4 value)
+    {
+        assert(data::current_material);
+
+        glUniform4fv(
+            data::current_material->shader_uniforms[parameter_name],
+            1, glm::value_ptr(value)
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, int count, glm::vec4 *values)
+    {
+        assert(data::current_material);
+
+        glUniform4fv(
+            data::current_material->shader_uniforms[parameter_name],
+            count, glm::value_ptr(values[0])
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, glm::mat3 value)
+    {
+        assert(data::current_material);
+
+        glUniformMatrix3fv(
+            data::current_material->shader_uniforms[parameter_name],
+            1, GL_FALSE,
+            glm::value_ptr(value)
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, int  count, glm::mat3 *values)
+    {
+        assert(data::current_material);
+
+        glUniformMatrix3fv(
+            data::current_material->shader_uniforms[parameter_name],
+            count, GL_FALSE,
+            glm::value_ptr(values[0])
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, glm::mat4 value)
+    {
+        assert(data::current_material);
+
+        glUniformMatrix4fv(
+            data::current_material->shader_uniforms[parameter_name],
+            1, GL_FALSE,
+            glm::value_ptr(value)
+        );
+    }
+
+    static void set_material_parameter(const std::string &parameter_name, int  count, glm::mat4 *values)
+    {
+        assert(data::current_material);
+
+        glUniformMatrix4fv(
+            data::current_material->shader_uniforms[parameter_name],
+            count, GL_FALSE,
+            glm::value_ptr(values[0])
+        );
+    }
+
+    static void set_material_current(Material *material)
+    {
+        data::current_material = material;
+        if (material != nullptr) {
+            glUseProgram(material->shader_program);
+
+            glLineWidth(static_cast<GLfloat>(material->line_width));
+
+            if (material->point_sizing_enabled) {
+                glEnable(GL_PROGRAM_POINT_SIZE);
+            } else {
+                glDisable(GL_PROGRAM_POINT_SIZE);
+            }
+
+            if (material->face_culling_enabled) {
+                glEnable(GL_CULL_FACE);
+            } else {
+                glDisable(GL_CULL_FACE);
+            }
+            glCullFace(utilities::convert_cull_face_mode_to_es2_cull_face_mode(material->cull_face_mode));
+            glFrontFace(utilities::convert_front_face_order_to_es2_front_face_order(material->front_face_order));
+
+            if (material->depth_mask_enabled) {
+                glDepthMask(GL_TRUE);
+            } else {
+                glDepthMask(GL_FALSE);
+            }
+            if (material->depth_test_enabled) {
+                glEnable(GL_DEPTH_TEST);
+            } else {
+                glDisable(GL_DEPTH_TEST);
+            }
+            glDepthFunc(utilities::convert_depth_test_func_to_es2_depth_test_func(material->depth_test_function));
+
+            if (material->blending_enabled) {
+                glEnable(GL_BLEND);
+            } else {
+                glDisable(GL_BLEND);
+            }
+            glBlendEquationSeparate(
+                utilities::convert_blending_equation_to_es2_blending_equation(material->color_blending_equation),
+                utilities::convert_blending_equation_to_es2_blending_equation(material->alpha_blending_equation)
+            );
+            glBlendFuncSeparate(
+                utilities::convert_blending_func_to_es2_blending_func(material->source_color_blending_function),
+                utilities::convert_blending_func_to_es2_blending_func(material->destination_color_blending_function),
+                utilities::convert_blending_func_to_es2_blending_func(material->source_alpha_blending_function),
+                utilities::convert_blending_func_to_es2_blending_func(material->destination_alpha_blending_function)
+            );
+            glBlendColor(
+                static_cast<GLclampf>(material->blending_constant_color[0]),
+                static_cast<GLclampf>(material->blending_constant_color[1]),
+                static_cast<GLclampf>(material->blending_constant_color[2]),
+                static_cast<GLclampf>(material->blending_constant_color[3])
+            );
+
+            if (material->polygon_offset_enabled) {
+                glEnable(GL_POLYGON_OFFSET_FILL);
+            } else {
+                glDisable(GL_POLYGON_OFFSET_FILL);
+            }
+            glPolygonOffset(
+                static_cast<GLfloat>(material->polygon_offset_factor),
+                static_cast<GLfloat>(material->polygon_offset_units)
+            );
+        } else {
+            glUseProgram(0);
+        }
+    }
+
+    static void destroy_material(Material &material)
     {
         GLint current_shader_program;
         glGetIntegerv(GL_CURRENT_PROGRAM, &current_shader_program);
-        if (data::shader_program == current_shader_program) {
+        if (material.shader_program == current_shader_program) {
             glUseProgram(0);
         }
 
-        glDeleteProgram(data::shader_program);
-        data::shader_program = 0;
+        glDeleteProgram(material.shader_program);
+        material.shader_program = 0;
 
-        data::position_attribute_location = -1;
-        data::color_attribute_location = -1;
-        data::texture_coordinates_attribute_location = -1;
+        material.position_attribute_location = -1;
+        material.normal_attribute_location = -1;
+        material.color_attribute_location = -1;
+        material.texture_coordinates_attribute_location = -1;
 
-        data::resolution_uniform_location = -1;
-        data::mouse_uniform_location = -1;
+        material.instance_transform_attribute_location = -1;
+        material.instance_color_attribute_location = -1;
 
-        data::time_uniform_location = -1;
-        data::dt_uniform_location = -1;
+        material.resolution_uniform_location = -1;
+        material.mouse_uniform_location = -1;
 
-        data::texture_sampler_uniform_location = -1;
-        data::texture_enabled_uniform_location = -1;
-        data::texturing_mode_uniform_location = -1;
-        data::texture_transformation_matrix_uniform_location = -1;
+        material.time_uniform_location = -1;
+        material.dt_uniform_location = -1;
 
-        data::model_matrix_uniform_location = -1;
-        data::view_matrix_uniform_location = -1;
-        data::model_view_matrix_uniform_location = -1;
-        data::projection_matrix_uniform_location = -1;
-        data::view_projection_matrix_uniform_location = -1;
-        data::mvp_matrix_uniform_location = -1;
+        material.texture_enabled_uniform_location = -1;
+        material.texture_transformation_matrix_uniform_location = -1;
+        material.texturing_mode_uniform_location = -1;
+        material.texture_sampler_uniform_location = -1;
+
+        material.point_size_uniform_location = -1;
+
+        material.model_matrix_uniform_location = -1;
+        material.view_matrix_uniform_location = -1;
+        material.model_view_matrix_uniform_location = -1;
+        material.projection_matrix_uniform_location = -1;
+        material.view_projection_matrix_uniform_location = -1;
+        material.mvp_matrix_uniform_location = -1;
     }
 
     /*
      * Geometry Handling
      */
 
-    static Geometry create_geometry(GeometryType type, Vertices vertices, Indices indices)
+    static Geometry create_geometry(
+                        GeometryType type, Vertices vertices, Indices indices,
+                        Instances instances = {}
+                    )
     {
         Geometry geometry{type, static_cast<unsigned int>(indices.size())};
 
@@ -555,10 +1223,23 @@ namespace asr
         glBindBuffer(GL_ARRAY_BUFFER, geometry.vertex_buffer_object);
         glBufferData(
             GL_ARRAY_BUFFER,
-            static_cast<GLsizeiptr>(vertices.size() * 9 * sizeof(float)),
+            static_cast<GLsizeiptr>(vertices.size() * 12 * sizeof(float)),
             reinterpret_cast<const float *>(vertices.data()),
             GL_STATIC_DRAW
         );
+
+        if (!instances.empty()) {
+            geometry.instance_count = static_cast<unsigned int>(instances.size());
+
+            glGenBuffers(1, &geometry.instance_buffer_object);
+            glBindBuffer(GL_ARRAY_BUFFER, geometry.instance_buffer_object);
+            glBufferData(
+                GL_ARRAY_BUFFER,
+                static_cast<GLsizeiptr>(instances.size() * 20 * sizeof(float)),
+                reinterpret_cast<const float *>(instances.data()),
+                GL_STATIC_DRAW
+            );
+        }
 
         glGenBuffers(1, &geometry.index_buffer_object);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geometry.index_buffer_object);
@@ -567,23 +1248,6 @@ namespace asr
             static_cast<GLsizeiptr>(indices.size() * sizeof(decltype(indices)::value_type)),
             reinterpret_cast<const unsigned int *>(indices.data()),
             GL_STATIC_DRAW
-        );
-
-        GLsizei stride = sizeof(GLfloat) * 9;
-        glEnableVertexAttribArray(data::position_attribute_location);
-        glVertexAttribPointer(
-            data::position_attribute_location,
-            3, GL_FLOAT, GL_FALSE, stride, static_cast<const GLvoid *>(nullptr)
-        );
-        glEnableVertexAttribArray(data::color_attribute_location);
-        glVertexAttribPointer(
-            data::color_attribute_location,
-            4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 3)
-        );
-        glEnableVertexAttribArray(data::texture_coordinates_attribute_location);
-        glVertexAttribPointer(
-            data::texture_coordinates_attribute_location,
-            2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 7)
         );
 
 #ifdef __APPLE__
@@ -601,6 +1265,84 @@ namespace asr
     {
         data::current_geometry = geometry;
         if (geometry != nullptr) {
+            assert(data::current_material);
+
+#ifdef __APPLE__
+            glBindVertexArrayAPPLE(geometry->vertex_array_object);
+#else
+            glBindVertexArray(geometry->vertex_array_object);
+#endif
+            glBindBuffer(GL_ARRAY_BUFFER, geometry->vertex_buffer_object);
+
+            GLsizei stride = sizeof(GLfloat) * 12;
+            glEnableVertexAttribArray(data::current_material->position_attribute_location);
+            glVertexAttribPointer(
+                data::current_material->position_attribute_location,
+                3, GL_FLOAT, GL_FALSE, stride, static_cast<const GLvoid *>(nullptr)
+            );
+            glEnableVertexAttribArray(data::current_material->normal_attribute_location);
+            glVertexAttribPointer(
+                data::current_material->normal_attribute_location,
+                3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 3)
+            );
+            glEnableVertexAttribArray(data::current_material->color_attribute_location);
+            glVertexAttribPointer(
+                data::current_material->color_attribute_location,
+                4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 6)
+            );
+            glEnableVertexAttribArray(data::current_material->texture_coordinates_attribute_location);
+            glVertexAttribPointer(
+                data::current_material->texture_coordinates_attribute_location,
+                2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 10)
+            );
+
+            if (geometry->instance_buffer_object) {
+                glBindBuffer(GL_ARRAY_BUFFER, geometry->instance_buffer_object);
+
+                stride = sizeof(GLfloat) * 20;
+                glEnableVertexAttribArray(data::current_material->instance_transform_attribute_location);
+                glVertexAttribPointer(
+                    data::current_material->instance_transform_attribute_location,
+                    4, GL_FLOAT, GL_FALSE, stride, static_cast<const GLvoid *>(nullptr)
+                );
+                glVertexAttribDivisorARB(data::current_material->instance_transform_attribute_location, 1);
+                glEnableVertexAttribArray(data::current_material->instance_transform_attribute_location + 1);
+                glVertexAttribPointer(
+                    data::current_material->instance_transform_attribute_location + 1,
+                    4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 4)
+                );
+                glVertexAttribDivisorARB(data::current_material->instance_transform_attribute_location + 1, 1);
+                glEnableVertexAttribArray(data::current_material->instance_transform_attribute_location + 2);
+                glVertexAttribPointer(
+                    data::current_material->instance_transform_attribute_location + 2,
+                    4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 8)
+                );
+                glVertexAttribDivisorARB(data::current_material->instance_transform_attribute_location + 2, 1);
+                glEnableVertexAttribArray(data::current_material->instance_transform_attribute_location + 3);
+                glVertexAttribPointer(
+                    data::current_material->instance_transform_attribute_location + 3,
+                    4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 12)
+                );
+                glVertexAttribDivisorARB(data::current_material->instance_transform_attribute_location + 3, 1);
+
+                glEnableVertexAttribArray(data::current_material->instance_color_attribute_location);
+                glVertexAttribPointer(
+                    data::current_material->instance_color_attribute_location,
+                    4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 16)
+                );
+                glVertexAttribDivisorARB(data::current_material->instance_color_attribute_location, 1);
+            }
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geometry->index_buffer_object);
+
+#ifdef __APPLE__
+            glBindVertexArrayAPPLE(0);
+#else
+            glBindVertexArray(0);
+#endif
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
 #ifdef __APPLE__
             glBindVertexArrayAPPLE(geometry->vertex_array_object);
 #else
@@ -643,6 +1385,17 @@ namespace asr
         }
         glDeleteBuffers(1, &geometry.vertex_buffer_object);
         geometry.vertex_buffer_object = 0;
+
+        if (geometry.instance_buffer_object) {
+            GLint current_instance_buffer_object;
+            glGetIntegerv(GL_VERTEX_ARRAY_BUFFER_BINDING, &current_instance_buffer_object);
+            if (geometry.instance_buffer_object == static_cast<GLint>(current_instance_buffer_object)) {
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+            }
+            glDeleteBuffers(1, &geometry.instance_buffer_object);
+            geometry.instance_buffer_object = 0;
+            geometry.instance_count = 0;
+        }
 
         GLint current_index_buffer_object;
         glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &current_index_buffer_object);
@@ -857,6 +1610,11 @@ namespace asr
         return data::view_matrix_stack.top();
     }
 
+    static inline glm::mat4 get_view_matrix_inverted()
+    {
+        return glm::inverse(data::view_matrix_stack.top());
+    }
+
     static inline glm::mat4 get_projection_matrix()
     {
         return data::projection_matrix_stack.top();
@@ -991,7 +1749,6 @@ namespace asr
     {
         glClearColor(0, 0, 0, 0);
         glViewport(0, 0, static_cast<GLsizei>(data::window_width), static_cast<GLsizei>(data::window_height));
-        glEnable(GL_PROGRAM_POINT_SIZE);
 
         while (!data::model_matrix_stack.empty()) data::model_matrix_stack.pop();
         data::model_matrix_stack.push(glm::mat4{1.0f});
@@ -1008,34 +1765,6 @@ namespace asr
         data::rendering_start_time = std::chrono::system_clock::now();
     }
 
-    static void set_line_width(float line_width)
-    {
-        glLineWidth(static_cast<GLfloat>(line_width));
-    }
-
-    static void enable_face_culling()
-    {
-        glEnable(GL_CULL_FACE);
-        glFrontFace(GL_CCW);
-        glCullFace(GL_BACK);
-    }
-
-    static void disable_face_culling()
-    {
-        glDisable(GL_CULL_FACE);
-    }
-
-    static void enable_depth_test()
-    {
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LESS);
-    }
-
-    static void disable_depth_test()
-    {
-        glDisable(GL_DEPTH_TEST);
-    }
-
     static void prepare_to_render_frame()
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1046,139 +1775,167 @@ namespace asr
     static void render_current_geometry()
     {
         assert(data::current_geometry);
+        assert(data::current_material);
 
-        glUseProgram(data::shader_program);
-
-        if (data::resolution_uniform_location != -1) {
+        if (data::current_material->resolution_uniform_location != -1) {
             glUniform2f(
-                data::resolution_uniform_location,
+                data::current_material->resolution_uniform_location,
                 static_cast<GLfloat>(data::window_width),
                 static_cast<GLfloat>(data::window_height)
             );
         }
 
-        if (data::mouse_uniform_location != -1) {
+        if (data::current_material->mouse_uniform_location != -1) {
             glUniform2f(
-                data::mouse_uniform_location,
+                data::current_material->mouse_uniform_location,
                 static_cast<GLfloat>(data::mouse_x),
                 static_cast<GLfloat>(data::mouse_y)
             );
         }
 
-        if (data::time_uniform_location != -1) {
+        if (data::current_material->time_uniform_location != -1) {
             float time =
                 static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::system_clock::now() - data::rendering_start_time
                 ).count()) / 1000.0f;
 
             glUniform1f(
-                data::time_uniform_location,
+                data::current_material->time_uniform_location,
                 static_cast<GLfloat>(time)
             );
         }
 
-        if (data::dt_uniform_location != -1) {
+        if (data::current_material->dt_uniform_location != -1) {
             glUniform1f(
-                data::dt_uniform_location,
+                data::current_material->dt_uniform_location,
                 static_cast<GLfloat>(data::frame_rendering_delta_time)
             );
         }
 
         bool texture_enabled = data::current_texture != nullptr;
-        if (data::texture_enabled_uniform_location != -1) {
+        if (data::current_material->texture_enabled_uniform_location != -1) {
             glUniform1i(
-                data::texture_enabled_uniform_location,
+                data::current_material->texture_enabled_uniform_location,
                 static_cast<GLint>(texture_enabled)
             );
         }
 
-        if (data::texture_sampler_uniform_location != -1) {
-            glUniform1i(data::texture_sampler_uniform_location, 0);
+        if (data::current_material->texture_sampler_uniform_location != -1) {
+            glUniform1i(data::current_material->texture_sampler_uniform_location, 0);
         }
 
-        if (data::texture_transformation_matrix_uniform_location != -1) {
+        if (data::current_material->texturing_mode_uniform_location != -1 && data::current_texture != nullptr) {
+            glUniform1i(
+                data::current_material->texturing_mode_uniform_location,
+                static_cast<GLint>(data::current_texture->mode)
+            );
+        }
+
+        if (data::current_material->texture_transformation_matrix_uniform_location != -1) {
             glm::mat4 texture_matrix = data::texture_matrix_stack.top();
             glUniformMatrix4fv(
-                data::texture_transformation_matrix_uniform_location,
+                data::current_material->texture_transformation_matrix_uniform_location,
                 1, GL_FALSE,
                 glm::value_ptr(texture_matrix)
             );
         }
 
-        if (data::texturing_mode_uniform_location != -1 && data::current_texture != nullptr) {
-            glUniform1i(
-                data::texturing_mode_uniform_location,
-                static_cast<GLint>(data::current_texture->mode)
+        if (data::current_material->point_size_uniform_location != -1) {
+            glUniform1f(
+                data::current_material->point_size_uniform_location,
+                static_cast<GLfloat>(data::current_material->point_size)
             );
         }
 
-        if (data::model_matrix_uniform_location != -1) {
+        if (data::current_material->model_matrix_uniform_location != -1) {
             glm::mat4 model_matrix = data::model_matrix_stack.top();
             glUniformMatrix4fv(
-                data::model_matrix_uniform_location,
+                data::current_material->model_matrix_uniform_location,
                 1, GL_FALSE,
                 glm::value_ptr(model_matrix)
             );
         }
 
-        if (data::view_matrix_uniform_location != -1) {
+        if (data::current_material->view_matrix_uniform_location != -1) {
             glm::mat4 view_matrix = glm::inverse(data::view_matrix_stack.top());
             glUniformMatrix4fv(
-                data::view_matrix_uniform_location,
+                data::current_material->view_matrix_uniform_location,
                 1, GL_FALSE,
                 glm::value_ptr(view_matrix)
             );
         }
 
-        if (data::model_view_matrix_uniform_location != -1) {
+        if (data::current_material->model_view_matrix_uniform_location != -1) {
             glm::mat4 model_matrix = data::model_matrix_stack.top();
             glm::mat4 view_matrix = glm::inverse(data::view_matrix_stack.top());
             glm::mat4 model_view_matrix = view_matrix * model_matrix;
             glUniformMatrix4fv(
-                data::model_view_matrix_uniform_location,
+                data::current_material->model_view_matrix_uniform_location,
                 1, GL_FALSE,
                 glm::value_ptr(model_view_matrix)
             );
         }
 
-        if (data::projection_matrix_uniform_location != -1) {
+        if (data::current_material->projection_matrix_uniform_location != -1) {
             glm::mat4 projection_matrix = data::projection_matrix_stack.top();
             glUniformMatrix4fv(
-                data::projection_matrix_uniform_location,
+                data::current_material->projection_matrix_uniform_location,
                 1, GL_FALSE,
                 glm::value_ptr(projection_matrix)
             );
         }
 
-        if (data::view_projection_matrix_uniform_location != -1) {
+        if (data::current_material->view_projection_matrix_uniform_location != -1) {
             glm::mat4 view_matrix = glm::inverse(data::view_matrix_stack.top());
             glm::mat4 projection_matrix = data::projection_matrix_stack.top();
             glm::mat4 view_projection_matrix = projection_matrix * view_matrix;
             glUniformMatrix4fv(
-                data::view_projection_matrix_uniform_location,
+                data::current_material->view_projection_matrix_uniform_location,
                 1, GL_FALSE,
                 glm::value_ptr(view_projection_matrix)
             );
         }
 
-        if (data::mvp_matrix_uniform_location != -1) {
+        if (data::current_material->mvp_matrix_uniform_location != -1) {
             glm::mat4 model_matrix = data::model_matrix_stack.top();
             glm::mat4 view_matrix = glm::inverse(data::view_matrix_stack.top());
             glm::mat4 projection_matrix = data::projection_matrix_stack.top();
             glm::mat4 model_view_projection_matrix = projection_matrix * view_matrix * model_matrix;
             glUniformMatrix4fv(
-                data::mvp_matrix_uniform_location,
+                data::current_material->mvp_matrix_uniform_location,
                 1, GL_FALSE,
                 glm::value_ptr(model_view_projection_matrix)
             );
         }
 
-        glDrawElements(
-            utilities::convert_geometry_type_to_es2_geometry_type(data::current_geometry->type),
-            static_cast<GLsizei>(data::current_geometry->vertex_count),
-            GL_UNSIGNED_INT,
-            nullptr
-        );
+        if (data::current_material->normal_matrix_uniform_location != -1) {
+            glm::mat4 model_matrix = data::model_matrix_stack.top();
+            glm::mat4 view_matrix = glm::inverse(data::view_matrix_stack.top());
+            glm::mat4 model_view_matrix = view_matrix * model_matrix;
+            glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model_view_matrix));
+            glUniformMatrix3fv(
+                data::current_material->normal_matrix_uniform_location,
+                1, GL_FALSE,
+                glm::value_ptr(normal_matrix)
+            );
+        }
+
+        if (data::current_geometry->instance_count > 0) {
+            glDrawElementsInstancedARB(
+                utilities::convert_geometry_type_to_es2_geometry_type(data::current_geometry->type),
+                static_cast<GLsizei>(data::current_geometry->vertex_count),
+                GL_UNSIGNED_INT,
+                nullptr,
+                static_cast<GLsizei>(data::current_geometry->instance_count)
+            );
+        } else {
+            glDrawElements(
+                utilities::convert_geometry_type_to_es2_geometry_type(data::current_geometry->type),
+                static_cast<GLsizei>(data::current_geometry->vertex_count),
+                GL_UNSIGNED_INT,
+                nullptr
+            );
+        }
     }
 
     static void finish_frame_rendering()

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <string>
 #include <utility>
+#include <vector>
 
 static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
     #version 110
@@ -13,6 +14,8 @@ static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
 
     uniform bool texture_enabled;
     uniform mat4 texture_transformation_matrix;
+
+    uniform float point_size;
 
     uniform mat4 model_view_projection_matrix;
 
@@ -28,7 +31,7 @@ static const std::string Vertex_Shader_Source{R"( // NOLINT(cert-err58-cpp)
         }
 
         gl_Position = model_view_projection_matrix * position;
-        gl_PointSize = 10.0;
+        gl_PointSize = point_size;
     }
 )"};
 
@@ -86,6 +89,7 @@ static asr::GeometryPair generate_circle_geometry_data(
 
     vertices.push_back(asr::Vertex{
         0.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f,
         color.r, color.g, color.b, color.a,
         0.5f, 0.5f
     });
@@ -102,6 +106,7 @@ static asr::GeometryPair generate_circle_geometry_data(
     float v{1.0f - (0.5f + std::sin(angle) * 0.5f)};
     vertices.push_back(asr::Vertex{
         x, y, 0.0f,
+        0.0f, 0.0f, 1.0f,
         color.r, color.g, color.b, color.a,
         u, v
     });
@@ -124,6 +129,7 @@ static asr::GeometryPair generate_circle_geometry_data(
         float next_v{1.0f - (0.5f + std::sin(angle + angle_delta) * 0.5f)};
         vertices.push_back(asr::Vertex{
             next_x, next_y, 0.0f,
+            0.0f, 0.0f, 1.0f,
             color.r, color.g, color.b, color.a,
             next_u, next_v
         });
@@ -139,11 +145,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
 {
     using namespace asr;
 
-    create_window(500U, 500U, "Circle Test on ASR Version 1.2");
-    create_shader(Vertex_Shader_Source, Fragment_Shader_Source);
+    create_window(500U, 500U, "Circle Test on ASR Version 1.3");
 
     float radius{0.5f};
     unsigned int segments{10U};
+
+    auto material = create_material(Vertex_Shader_Source, Fragment_Shader_Source);
 
     auto [triangle_vertices, triangle_indices] = generate_circle_geometry_data(Triangles, radius, segments);
     auto triangles = create_geometry(Triangles, triangle_vertices, triangle_indices);
@@ -157,11 +164,15 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     auto [vertices, vertex_indices] = generate_circle_geometry_data(Points, radius, segments, vertex_color);
     for (auto &vertex : vertices) { vertex.z -= 0.02f; }
     auto points = create_geometry(Points, vertices, vertex_indices);
+
     auto image = read_image_file("data/images/uv_test.png");
     auto texture = create_texture(image);
 
     prepare_for_rendering();
-    set_line_width(3.0f);
+
+    set_material_current(&material);
+    set_material_line_width(3.0f);
+    set_material_point_size(10.0f);
 
     bool should_stop{false};
     while (!should_stop) {
@@ -183,11 +194,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     }
 
     destroy_texture(texture);
+
     destroy_geometry(triangles);
     destroy_geometry(lines);
     destroy_geometry(points);
 
-    destroy_shader();
+    destroy_material(material);
+
     destroy_window();
 
     return 0;

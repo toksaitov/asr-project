@@ -95,6 +95,7 @@ static asr::GeometryPair generate_ring_geometry_data(
         float next_v{1.0f - (0.5f + std::sin(angle + angle_delta) * 0.5f * radius1norm)};
         vertices.push_back(asr::Vertex{
             next_x, next_y, 0.0f,
+            0.0f, 0.0f, 1.0f,
             color.r, color.g, color.b, color.a,
             next_u, next_v
         });
@@ -113,6 +114,7 @@ static asr::GeometryPair generate_ring_geometry_data(
         float next_v{1.0f - (0.5f + std::sin(angle + angle_delta) * 0.5f)};
         vertices.push_back(asr::Vertex{
             next_x, next_y, 0.0f,
+            0.0f, 0.0f, 1.0f,
             color.r, color.g, color.b, color.a,
             next_u, next_v
         });
@@ -131,14 +133,14 @@ static asr::GeometryPair generate_ring_geometry_data(
             unsigned int index_d{index_c + 1};
             if (geometry_type == asr::GeometryType::Lines) {
                 indices.insert(indices.end(), {
-                    index_a, index_b, index_b, index_c, index_c, index_a
+                    index_c, index_b, index_b, index_a, index_a, index_c
                 });
                 indices.insert(indices.end(), {
-                    index_b, index_d, index_d, index_c, index_c, index_b
+                    index_c, index_d, index_d, index_b, index_b, index_c
                 });
             } else {
-                indices.insert(indices.end(), {index_a, index_b, index_c});
-                indices.insert(indices.end(), {index_b, index_d, index_c});
+                indices.insert(indices.end(), {index_c, index_b, index_a});
+                indices.insert(indices.end(), {index_c, index_d, index_b});
             }
         }
     }
@@ -150,8 +152,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
 {
     using namespace asr;
 
-    create_window(500U, 500U, "Ring Test on ASR Version 1.2");
-    create_shader(Vertex_Shader_Source, Fragment_Shader_Source);
+    create_window(500U, 500U, "Ring Test on ASR Version 1.3");
+
+    auto material = create_material(Vertex_Shader_Source, Fragment_Shader_Source);
 
     float radius1{0.5f}, radius2{0.7f};
     unsigned int segments{25};
@@ -173,7 +176,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     auto texture = create_texture(image);
 
     prepare_for_rendering();
-    set_line_width(3.0f);
+
+    set_material_current(&material);
+    set_material_line_width(3.0f);
+    set_material_point_size(10.0f);
 
     bool should_stop{false};
     while (!should_stop) {
@@ -195,11 +201,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
     }
 
     destroy_texture(texture);
+
     destroy_geometry(triangles);
     destroy_geometry(lines);
     destroy_geometry(points);
 
-    destroy_shader();
+    destroy_material(material);
+
     destroy_window();
 
     return 0;
