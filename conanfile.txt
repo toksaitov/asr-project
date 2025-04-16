@@ -1,8 +1,18 @@
 [requires]
-sdl/[~2]
+sdl/[~2.28]
 glew/[~2]
 glm/[~1]
-stb/cci.20240531
+stb/cci.20230920
+imgui/[~1]
+sdl_mixer/[~2]
+
+[options]
+sdl_mixer/*:flac=False
+sdl_mixer/*:mpg123=False
+sdl_mixer/*:opus=False
+sdl_mixer/*:modplug=False
+sdl_mixer/*:nativemidi=False
+sdl_mixer/*:tinymidi=False
 
 [tool_requires]
 cmake/[~3.25]
