@@ -53,24 +53,28 @@ namespace asr
             SourceAlphaSaturate
         };
 
-        enum CullFaceMode {
+        enum CullFaceMode
+        {
             CullFrontFaces,
             CullBackFaces,
             CullFrontAndBackFaces
         };
 
-        enum FrontFaceOrder {
+        enum FrontFaceOrder
+        {
             Clockwise,
             Counterclockwise
         };
 
-        enum FogType {
+        enum FogType
+        {
             Linear,
             Exp,
             Exp2
         };
 
-        enum FogDepth {
+        enum FogDepth
+        {
             Planar,
             PlanarAbsolute,
             Radial
@@ -83,179 +87,223 @@ namespace asr
 
         virtual ~Material() = default;
 
-        [[nodiscard]] float get_line_width() const {
+        [[nodiscard]] float get_line_width() const
+        {
             return _line_width;
         }
 
-        void set_line_width(float line_width) {
+        void set_line_width(float line_width)
+        {
             _line_width = line_width;
         }
 
-        [[nodiscard]] bool prefer_line_width_from_geometry() const {
+        [[nodiscard]] bool prefer_line_width_from_geometry() const
+        {
             return _prefer_line_width_from_geometry;
         }
 
-        void set_prefer_line_width_from_geometry(bool prefer_line_width_from_geometry) {
+        void set_prefer_line_width_from_geometry(bool prefer_line_width_from_geometry)
+        {
             _prefer_line_width_from_geometry = prefer_line_width_from_geometry;
         }
 
-        [[nodiscard]] bool is_point_sizing_enabled() const {
+        [[nodiscard]] bool is_point_sizing_enabled() const
+        {
             return _point_sizing_enabled;
         }
 
-        void set_point_sizing_enabled(bool point_sizing_enabled) {
+        void set_point_sizing_enabled(bool point_sizing_enabled)
+        {
             _point_sizing_enabled = point_sizing_enabled;
         }
 
-        [[nodiscard]] float get_point_size() const {
+        [[nodiscard]] float get_point_size() const
+        {
             return _point_size;
         }
 
-        void set_point_size(float point_size) {
+        void set_point_size(float point_size)
+        {
             _point_size = point_size;
         }
 
-        [[nodiscard]] bool prefer_point_size_from_geometry() const {
+        [[nodiscard]] bool prefer_point_size_from_geometry() const
+        {
             return _prefer_point_size_from_geometry;
         }
 
-        void set_prefer_point_size_from_geometry(bool prefer_point_size_from_geometry) {
+        void set_prefer_point_size_from_geometry(bool prefer_point_size_from_geometry)
+        {
             _prefer_point_size_from_geometry = prefer_point_size_from_geometry;
         }
 
-        [[nodiscard]] bool is_depth_mask_enabled() const {
+        [[nodiscard]] bool is_depth_mask_enabled() const
+        {
             return _depth_mask_enabled;
         }
 
-        void set_depth_mask_enabled(bool depth_mask_enabled) {
+        void set_depth_mask_enabled(bool depth_mask_enabled)
+        {
             _depth_mask_enabled = depth_mask_enabled;
         }
 
-        [[nodiscard]] bool is_depth_test_enabled() const {
+        [[nodiscard]] bool is_depth_test_enabled() const
+        {
             return _depth_test_enabled;
         }
 
-        void set_depth_test_enabled(bool depth_test_enabled) {
+        void set_depth_test_enabled(bool depth_test_enabled)
+        {
             _depth_test_enabled = depth_test_enabled;
         }
 
-        [[nodiscard]] DepthTestFunction get_depth_test_function() const {
+        [[nodiscard]] DepthTestFunction get_depth_test_function() const
+        {
             return _depth_test_function;
         }
 
-        void set_depth_test_function(DepthTestFunction depth_test_function) {
+        void set_depth_test_function(DepthTestFunction depth_test_function)
+        {
             _depth_test_function = depth_test_function;
         }
 
-        [[nodiscard]] bool is_blending_enabled() const {
+        [[nodiscard]] bool is_blending_enabled() const
+        {
             return _blending_enabled;
         }
 
-        void set_blending_enabled(bool blending_enabled) {
+        void set_blending_enabled(bool blending_enabled)
+        {
             _blending_enabled = blending_enabled;
         }
 
-        [[nodiscard]] BlendingEquation get_color_blending_equation() const {
+        [[nodiscard]] BlendingEquation get_color_blending_equation() const
+        {
             return _color_blending_equation;
         }
 
-        void set_color_blending_equation(BlendingEquation color_blending_equation) {
+        void set_color_blending_equation(BlendingEquation color_blending_equation)
+        {
             _color_blending_equation = color_blending_equation;
         }
 
-        [[nodiscard]] BlendingEquation get_alpha_blending_equation() const {
+        [[nodiscard]] BlendingEquation get_alpha_blending_equation() const
+        {
             return _alpha_blending_equation;
         }
 
-        void set_alpha_blending_equation(BlendingEquation alpha_blending_equation) {
+        void set_alpha_blending_equation(BlendingEquation alpha_blending_equation)
+        {
             _alpha_blending_equation = alpha_blending_equation;
         }
 
-        [[nodiscard]] BlendingFunction get_source_color_blending_function() const {
+        [[nodiscard]] BlendingFunction get_source_color_blending_function() const
+        {
             return _source_color_blending_function;
         }
 
-        void set_source_color_blending_function(BlendingFunction source_color_blending_function) {
+        void set_source_color_blending_function(BlendingFunction source_color_blending_function)
+        {
             _source_color_blending_function = source_color_blending_function;
         }
 
-        [[nodiscard]] BlendingFunction get_source_alpha_blending_function() const {
+        [[nodiscard]] BlendingFunction get_source_alpha_blending_function() const
+        {
             return _source_alpha_blending_function;
         }
 
-        void set_source_alpha_blending_function(BlendingFunction source_alpha_blending_function) {
+        void set_source_alpha_blending_function(BlendingFunction source_alpha_blending_function)
+        {
             _source_alpha_blending_function = source_alpha_blending_function;
         }
 
-        [[nodiscard]] BlendingFunction get_destination_color_blending_function() const {
+        [[nodiscard]] BlendingFunction get_destination_color_blending_function() const
+        {
             return _destination_color_blending_function;
         }
 
-        void set_destination_color_blending_function(BlendingFunction destination_color_blending_function) {
+        void set_destination_color_blending_function(BlendingFunction destination_color_blending_function)
+        {
             _destination_color_blending_function = destination_color_blending_function;
         }
 
-        [[nodiscard]] BlendingFunction get_destination_alpha_blending_function() const {
+        [[nodiscard]] BlendingFunction get_destination_alpha_blending_function() const
+        {
             return _destination_alpha_blending_function;
         }
 
-        void set_destination_alpha_blending_function(BlendingFunction destination_alpha_blending_function) {
+        void set_destination_alpha_blending_function(BlendingFunction destination_alpha_blending_function)
+        {
             _destination_alpha_blending_function = destination_alpha_blending_function;
         }
 
-        [[nodiscard]] const glm::vec4 &get_blending_constant_color() const {
+        [[nodiscard]] const glm::vec4 &get_blending_constant_color() const
+        {
             return _blending_constant_color;
         }
 
-        void set_blending_constant_color(const glm::vec4 &blending_constant_color) {
+        void set_blending_constant_color(const glm::vec4 &blending_constant_color)
+        {
             _blending_constant_color = blending_constant_color;
         }
 
-        [[nodiscard]] bool is_face_culling_enabled() const {
+        [[nodiscard]] bool is_face_culling_enabled() const
+        {
             return _face_culling_enabled;
         }
 
-        void set_face_culling_enabled(bool face_culling_enabled) {
+        void set_face_culling_enabled(bool face_culling_enabled)
+        {
             _face_culling_enabled = face_culling_enabled;
         }
 
-        [[nodiscard]] CullFaceMode get_cull_face_mode() const {
+        [[nodiscard]] CullFaceMode get_cull_face_mode() const
+        {
             return _cull_face_mode;
         }
 
-        void set_cull_face_mode(CullFaceMode cull_face_mode) {
+        void set_cull_face_mode(CullFaceMode cull_face_mode)
+        {
             _cull_face_mode = cull_face_mode;
         }
 
-        [[nodiscard]] FrontFaceOrder get_front_face_order() const {
+        [[nodiscard]] FrontFaceOrder get_front_face_order() const
+        {
             return _front_face_order;
         }
 
-        void set_front_face_order(FrontFaceOrder front_face_order) {
+        void set_front_face_order(FrontFaceOrder front_face_order)
+        {
             _front_face_order = front_face_order;
         }
 
-        [[nodiscard]] bool is_polygon_offset_enabled() const {
+        [[nodiscard]] bool is_polygon_offset_enabled() const
+        {
             return _polygon_offset_enabled;
         }
 
-        void set_polygon_offset_enabled(bool polygon_offset_enabled) {
+        void set_polygon_offset_enabled(bool polygon_offset_enabled)
+        {
             _polygon_offset_enabled = polygon_offset_enabled;
         }
 
-        [[nodiscard]] float get_polygon_offset_factor() const {
+        [[nodiscard]] float get_polygon_offset_factor() const
+        {
             return _polygon_offset_factor;
         }
 
-        void set_polygon_offset_factor(float polygon_offset_factor) {
+        void set_polygon_offset_factor(float polygon_offset_factor)
+        {
             _polygon_offset_factor = polygon_offset_factor;
         }
 
-        [[nodiscard]] float get_polygon_offset_units() const {
+        [[nodiscard]] float get_polygon_offset_units() const
+        {
             return _polygon_offset_units;
         }
 
-        void set_polygon_offset_units(float polygon_offset_units) {
+        void set_polygon_offset_units(float polygon_offset_units)
+        {
             _polygon_offset_units = polygon_offset_units;
         }
 

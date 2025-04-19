@@ -52,7 +52,8 @@ namespace asr
             return std::make_pair(intersects, distance);
         }
 
-        [[nodiscard]] intersection_test_result_type intersects_with_sphere(const Sphere &sphere) const {
+        [[nodiscard]] intersection_test_result_type intersects_with_sphere(const Sphere &sphere) const
+        {
             bool intersects = false;
             float distance = 0.0f;
 
